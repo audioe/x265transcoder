@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>x265 Transcoder</title>
+</head>
+<body>
+    <h1>x265 Transcoder</h1>
+    <form method="post" action="{{ url_for('run') }}">
+        <label for="folder">Folder:</label>
+        <input type="text" id="folder" name="folder" value="{{ folder }}"><br><br>
+        <label for="include">Include:</label>
+        <input type="text" id="include" name="include" value="{{ include }}"><br><br>
+        <label for="quality">Choose a Quality:</label>
+        <select name="quality" id="quality">
+            <option value="18">18 (Lossless)</option>
+              <option value="20">20</option>
+              <option value="23">23</option>
+              <option value="25">25 (Lossy)</option>
+        </select><br><br>
+        <input type="submit" value="Submit">
+    </form>
+</body>
+</html>
