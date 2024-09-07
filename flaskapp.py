@@ -14,8 +14,9 @@ def run():
         folder = request.form['folder']
         include = request.form['include']
         quality = request.form['quality']
+        delete = request.form['delete']
         # Call the x265transcoder.py script and pass the variables
-        subprocess.run(['python', 'x265transcoder.py', folder, include, quality])
+        subprocess.run(['python', 'x265transcoder.py', folder, include, quality, delete])
         return "Success"
 
 if __name__ == '__main__':
