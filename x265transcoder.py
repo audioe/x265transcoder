@@ -14,7 +14,7 @@ if __name__ == '__main__':
     mediafolder = sys.argv[1]
     include = sys.argv[2]
     quality = sys.argv[3]
-    delete = sys.argv[3]
+    delete = sys.argv[4]
 
     OldFolderSizeBytes = 0
     NewFolderSizeBytes = 0
