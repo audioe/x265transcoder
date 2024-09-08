@@ -11,6 +11,7 @@ def get_directories(parent_dir):
         entry_path = os.path.join(parent_dir, entry)
         if os.path.isdir(entry_path):
             directories.append(entry)
+    directories.sort()  # Sort the list of directories alphabetically
     return directories
 
 # Route to render the HTML page
