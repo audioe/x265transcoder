@@ -7,13 +7,14 @@ import requests
 from pymediainfo import MediaInfo
 
 if __name__ == '__main__':
-    if len(sys.argv) < 2:
-        print("Usage: python your_script.py <folder> <include>")
+    if len(sys.argv) < 3:
+        print("Usage: python your_script.py <folder> <include> <quality>")
         sys.exit(1)
 
     mediafolder = sys.argv[1]
     include = sys.argv[2]
     quality = sys.argv[3]
+    delete = sys.argv[4]
 
     OldFolderSizeBytes = 0
     NewFolderSizeBytes = 0
@@ -47,6 +48,10 @@ if __name__ == '__main__':
 
     # MAIN
     log(f"Starting Script Version {Version}.  Working in {mediafolder}, and looking for {include}")
+    if delete == "Yes":
+        log("Deleting files is enabled.")
+    else:
+        log("Deleting files is disabled.")
 
     log("Defining functions...")
 
@@ -102,6 +107,7 @@ if __name__ == '__main__':
         global FailedCount
         global SkippedCount
         global quality
+        global delete
         log("done.")
         #For HW Encoding, use "-rc_mode CQP -global_quality 18" instead of crf
         params = f"repeat-headers=1:profile=main10:level=5.1"
@@ -202,6 +208,13 @@ if __name__ == '__main__':
 
                     log(f"New file Frame Count: {newfileframecount}  |  Original file frame count: {fileframecount}")
                     log(f"Done.  New file size is {newfilesize} GB.  {percdiff}% smaller.")
+                    if delete == "Yes":
+                        log("Deleting original file...")
+                        try:
+                            os.remove(file_path + "_old")
+                            log("done.")
+                        except:
+                            log("ERROR: Unable to delete original file")
 
                     if jobfailed != "":
                         Failed.append(jobfailed)
