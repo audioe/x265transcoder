@@ -17,6 +17,7 @@ if __name__ == '__main__':
     delete = sys.argv[4]
     telegram_token = sys.argv[5]
     telegram_chatid = sys.argv[6]
+    version = sys.argv[7]
 
     OldFolderSizeBytes = 0
     NewFolderSizeBytes = 0
@@ -26,7 +27,7 @@ if __name__ == '__main__':
     FailedCount = 0
     SkippedCount = 0
 
-    Version = "4.6_web"
+    Version = version
     Logfilepath = "/logs"
     Date = datetime.now().strftime("%d-%m-%y_%H-%M-%S")
     Logfile = f"{Logfilepath}/transcode_{Date}.log"
@@ -58,6 +59,7 @@ if __name__ == '__main__':
     else:
         log("Deleting files is disabled.")
 
+    log(f"Telegram token passed through is {telegram_token}.  ChatID is {telegram_chatid}")
     log("Defining functions...")
 
     log("get_files")

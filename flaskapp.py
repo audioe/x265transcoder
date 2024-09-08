@@ -61,7 +61,7 @@ def run():
         telegram_token = str(get_secret("TELEGRAM_TOKEN"))
         telegram_chatid = str(get_secret("TELEGRAM_CHATID"))
         # Call the x265transcoder.py script and pass the variables
-        subprocess.run(['python', 'x265transcoder.py', folder, include, quality, delete, telegram_token, telegram_chatid])
+        subprocess.run(['python', 'x265transcoder.py', folder, include, quality, delete, telegram_token, telegram_chatid, version])
         return "Success"
 
 if __name__ == '__main__':
