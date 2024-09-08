@@ -76,7 +76,7 @@
                 {% if directory.subdirectories %}
                 <optgroup label="{{ directory.name }}">
                     {% for subdirectory in directory.subdirectories %}
-                    <option value="{{ subdirectory.path }}">{{ subdirectory.name }}</option>
+                    <option value="{{ os.path.join(directory.path, subdirectory.name) }}">{{ subdirectory.name }}</option>
                     {% endfor %}
                 </optgroup>
                 {% endif %}

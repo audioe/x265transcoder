@@ -19,15 +19,21 @@ def get_directories(parent_dir, directories=None):
         directories = []
 
     entries = os.listdir(parent_dir)
+    entries.sort()  # Sort the entries alphabetically
+
     for entry in entries:
         entry_path = os.path.join(parent_dir, entry)
         if os.path.isdir(entry_path):
+            subdirectories = get_directories(entry_path, [])
+            subdirectories.sort(key=lambda d: d['name'])  # Sort subdirectories alphabetically
+
             directories.append({
                 'name': entry,
                 'path': entry_path,
-                'subdirectories': get_directories(entry_path, [])
+                'subdirectories': subdirectories
             })
 
+    directories.sort(key=lambda d: d['name'])  # Sort top-level directories alphabetically
     return directories
 
 @app.route('/get_secret/secret')
