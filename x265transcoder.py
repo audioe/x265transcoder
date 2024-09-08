@@ -38,6 +38,9 @@ if __name__ == '__main__':
 
     # Function for sending Telegram Message
     def send_telegram_message(message):
+        # Grab global telegram variables
+        global telegram_token, telegram_chatid
+
         # Telegram API Token and Chat ID
         token = telegram_token
         chat_id = telegram_chatid
