@@ -15,6 +15,8 @@ if __name__ == '__main__':
     include = sys.argv[2]
     quality = sys.argv[3]
     delete = sys.argv[4]
+    telegram_token = sys.argv[5]
+    telegram_chatid = sys.argv[6]
 
     OldFolderSizeBytes = 0
     NewFolderSizeBytes = 0
@@ -37,8 +39,8 @@ if __name__ == '__main__':
     # Function for sending Telegram Message
     def send_telegram_message(message):
         # Telegram API Token and Chat ID
-        token = "5023514819:AAFeJygNEhJueBT4y1M_XppLdqWRmwUcrXQ"
-        chat_id = "-1001536638156"
+        token = telegram_token
+        chat_id = telegram_chatid
         #
         # Send the message
         url = f"https://api.telegram.org/bot{token}/sendMessage"

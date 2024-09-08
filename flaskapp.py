@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request
+from flask import Flask, render_template, request, jsonify
 import subprocess
 import os
 
@@ -7,6 +7,10 @@ app = Flask(__name__)
 # Read the version number from the file
 with open('version.txt', 'r') as f:
     version = f.read().strip()
+
+# Load the configuration file
+with open('/config/config.yaml', 'r') as f:
+    config = yaml.safe_load(f)
 
 # Function to get list of directories
 def get_directories(parent_dir):
@@ -17,6 +21,14 @@ def get_directories(parent_dir):
             directories.append(entry)
     directories.sort()  # Sort the list of directories alphabetically
     return directories
+
+@app.route('/get_secret/secret')
+def get_secret(secret_name):
+    try:
+        secret_value = config[secret_name]
+        return jsonify({'secret': secret_value})
+    except KeyError:
+        return jsonify({'error': 'Secret not found'}), 404
 
 # Route to render the HTML page
 @app.route('/')
@@ -32,8 +44,10 @@ def run():
         include = request.form['include']
         quality = request.form['quality']
         delete = request.form['delete']
+        telegram_token = get_secret("TELEGRAM_TOKEN")
+        telegram_chatid = get_secret("TELEGRAM_CHATID")
         # Call the x265transcoder.py script and pass the variables
-        subprocess.run(['python', 'x265transcoder.py', folder, include, quality, delete])
+        subprocess.run(['python', 'x265transcoder.py', folder, include, quality, delete, telegram_token, telegram_chatid])
         return "Success"
 
 if __name__ == '__main__':
