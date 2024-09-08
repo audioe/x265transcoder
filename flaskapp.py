@@ -14,13 +14,20 @@ with open('/config/config.yaml', 'r') as f:
     config = yaml.safe_load(f)
 
 # Function to get list of directories
-def get_directories(parent_dir):
-    directories = []
-    for entry in os.listdir(parent_dir):
+def get_directories(parent_dir, directories=None):
+    if directories is None:
+        directories = []
+
+    entries = os.listdir(parent_dir)
+    for entry in entries:
         entry_path = os.path.join(parent_dir, entry)
         if os.path.isdir(entry_path):
-            directories.append(entry)
-    directories.sort()  # Sort the list of directories alphabetically
+            directories.append({
+                'name': entry,
+                'path': entry_path,
+                'subdirectories': get_directories(entry_path, [])
+            })
+
     return directories
 
 @app.route('/get_secret/secret')

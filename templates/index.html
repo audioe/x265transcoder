@@ -23,6 +23,11 @@
             color: #333;
             text-shadow: 0px 0px 5px #06b301;
         }
+        h2 {
+            text-align: right;
+            color: #333;
+            font-size: 12px;
+        }
         hr {
             border: 0;
             height: 3px;
@@ -67,7 +72,14 @@
             <label for="folder">Folder:</label>
             <select name="folder" id="folder">
                 {% for directory in directories %}
-                <option value="{{ directory }}">{{ directory }}</option>
+                <option value="{{ directory.path }}">{{ directory.name }}</option>
+                {% if directory.subdirectories %}
+                <optgroup label="{{ directory.name }}">
+                    {% for subdirectory in directory.subdirectories %}
+                    <option value="{{ subdirectory.path }}">{{ subdirectory.name }}</option>
+                    {% endfor %}
+                </optgroup>
+                {% endif %}
                 {% endfor %}
             </select>
             <label for="include">Include:</label>
