@@ -54,7 +54,7 @@ def index():
 @app.route("/run", methods=["POST"])
 def run():
     if request.method == 'POST':
-        folder = request.form['folder']
+        folder = str(request.form['folder'])
         include = request.form['include']
         quality = request.form['quality']
         delete = request.form['delete']
