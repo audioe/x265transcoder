@@ -4,6 +4,10 @@ import os
 
 app = Flask(__name__)
 
+# Read the version number from the file
+with open('version.txt', 'r') as f:
+    version = f.read().strip()
+
 # Function to get list of directories
 def get_directories(parent_dir):
     directories = []
@@ -19,7 +23,7 @@ def get_directories(parent_dir):
 def index():
     parent_dir = "/shows"
     directories = get_directories(parent_dir)
-    return render_template('index.html', directories=directories)
+    return render_template('index.html', directories=directories, version=version)
 
 @app.route("/run", methods=["POST"])
 def run():
