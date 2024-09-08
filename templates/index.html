@@ -2,27 +2,85 @@
 <html>
 <head>
     <title>x265 Transcoder</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f2f2f2;
+        }
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #fff;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            border-radius: 5px;
+        }
+        h1 {
+            text-align: center;
+            color: #333;
+            text-shadow: 0px 0px 5px #06b301;
+        }
+        hr {
+            border: 0;
+            height: 3px;
+            background-color: #ccc;
+            margin: 20px 0;
+        }
+        form {
+            display: flex;
+            flex-direction: column;
+        }
+        label {
+            font-weight: bold;
+            margin-top: 20px;
+        }
+        input[type="text"], select {
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            font-size: 16px;
+        }
+        input[type="submit"] {
+            background-color: #4CAF50;
+            color: white;
+            padding: 12px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-top: 20px;
+            font-size: 16px;
+        }
+        input[type="submit"]:hover {
+            background-color: #45a049;
+        }
+    </style>
 </head>
 <body>
-    <h1>x265 Transcoder</h1>
-    <form method="post" action="{{ url_for('run') }}">
-        <label for="folder">Folder:</label>
-        <input type="text" id="folder" name="folder" value="{{ folder }}"><br><br>
-        <label for="include">Include:</label>
-        <input type="text" id="include" name="include" value="{{ include }}"><br><br>
-        <label for="quality">Choose a Quality:</label>
-        <select name="quality" id="quality">
-            <option value="18">18 (Lossless)</option>
-            <option value="20">20</option>
-            <option value="23">23</option>
-            <option value="25">25 (Lossy)</option>
-        </select><br><br>
-        <label for="delete">Delete after Transcoding?</label>
-        <select name="delete" id="delete">
-            <option value="Yes">Yes</option>
-            <option value="No">No</option>
-        </select><br><br>
-        <input type="submit" value="Submit">
-    </form>
+    <div class="container">
+        <h1>x265 Transcoder</h1>
+        <hr>
+        <form method="post" action="{{ url_for('run') }}">
+            <label for="folder">Folder:</label>
+            <input type="text" id="folder" name="folder" value="{{ folder }}">
+            <label for="include">Include:</label>
+            <input type="text" id="include" name="include" value="{{ include }}">
+            <label for="quality">Choose a Quality:</label>
+            <select name="quality" id="quality">
+                <option value="18">18 (Lossless)</option>
+                <option value="20">20</option>
+                <option value="23">23</option>
+                <option value="25">25 (Lossy)</option>
+            </select>
+            <label for="delete">Delete after Transcoding?</label>
+            <select name="delete" id="delete">
+                <option value="Yes">Yes</option>
+                <option value="No">No</option>
+            </select>
+            <input type="submit" value="Submit">
+        </form>
+    </div>
 </body>
 </html>
