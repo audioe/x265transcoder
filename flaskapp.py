@@ -49,7 +49,7 @@ def get_secret(secret_name):
 def index():
     parent_dir = "/shows"
     directories = get_directories(parent_dir)
-    return render_template('index.html', directories=directories, version=version)
+    return render_template('index.html', directories=directories, version=version, os=os)
 
 @app.route("/run", methods=["POST"])
 def run():
