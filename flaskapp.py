@@ -36,7 +36,7 @@ def get_directories(parent_dir, directories=None):
     directories.sort(key=lambda d: d['name'])  # Sort top-level directories alphabetically
     return directories
 
-@app.route('/get_secret/secret')
+@app.route('/get_secret/<string:secret_name>')
 def get_secret(secret_name):
     try:
         secret_value = config[secret_name]
