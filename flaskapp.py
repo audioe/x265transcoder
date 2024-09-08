@@ -1,12 +1,24 @@
 from flask import Flask, render_template, request
 import subprocess
+import os
 
 app = Flask(__name__)
+
+# Function to get list of directories
+def get_directories(parent_dir):
+    directories = []
+    for entry in os.listdir(parent_dir):
+        entry_path = os.path.join(parent_dir, entry)
+        if os.path.isdir(entry_path):
+            directories.append(entry)
+    return directories
 
 # Route to render the HTML page
 @app.route('/')
 def index():
-    return render_template('index.html')
+    parent_dir = "/shows"
+    directories = get_directories(parent_dir)
+    return render_template('index.html', directories=directories)
 
 @app.route("/run", methods=["POST"])
 def run():
