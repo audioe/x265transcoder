@@ -58,8 +58,8 @@ def run():
         include = request.form['include']
         quality = request.form['quality']
         delete = request.form['delete']
-        telegram_token = get_secret("TELEGRAM_TOKEN")
-        telegram_chatid = get_secret("TELEGRAM_CHATID")
+        telegram_token = str(get_secret("TELEGRAM_TOKEN"))
+        telegram_chatid = str(get_secret("TELEGRAM_CHATID"))
         # Call the x265transcoder.py script and pass the variables
         subprocess.run(['python', 'x265transcoder.py', folder, include, quality, delete, telegram_token, telegram_chatid])
         return "Success"
