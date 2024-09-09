@@ -47,7 +47,11 @@ def get_secret(secret_name):
 # Route to render the HTML page
 @app.route('/')
 def index():
-    parent_dir = "/shows"
+    return render_template('index.html', version=version, os=os)
+
+@app.route('/load_directories', methods=['POST'])
+def load_directories():
+    parent_dir = request.form.get('parent_dir', '/shows')  # Get the parent directory from the form data, or use a default value
     directories = get_directories(parent_dir)
     return render_template('index.html', directories=directories, version=version, os=os)
 

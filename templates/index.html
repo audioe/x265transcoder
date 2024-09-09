@@ -68,6 +68,12 @@
         <h1>x265 Transcoder</h1>
         <h2>Version {{ version }}</h2>
         <hr>
+        <form method="post" action="{{ url_for('load_directories') }}">
+            <label for="parent_dir">Parent Directory:</label>
+            <input type="text" id="parent_dir" name="parent_dir" value="/shows">
+            <input type="submit" value="Load Directories">
+        </form>
+        {% if directories %}
         <form method="post" action="{{ url_for('run') }}">
             <label for="folder">Folder:</label>
             <select name="folder" id="folder">
@@ -98,6 +104,6 @@
             </select>
             <input type="submit" value="Submit">
         </form>
+        {% endif %}
     </div>
 </body>
-</html>
