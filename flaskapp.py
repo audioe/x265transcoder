@@ -51,9 +51,10 @@ def index():
 
 @app.route('/load_directories', methods=['POST'])
 def load_directories():
-    parent_dir = request.form.get('parent_dir', '/shows')  # Get the parent directory from the form data, or use a default value
+    parent_dir = request.form.get('parent_dir', '/shows')
     directories = get_directories(parent_dir)
-    return render_template('index.html', directories=directories, version=version, os=os)
+    html = render_template('index.html', directories=directories, version=version, os=os)
+    return html
 
 @app.route("/run", methods=["POST"])
 def run():

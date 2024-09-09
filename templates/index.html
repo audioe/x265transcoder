@@ -61,6 +61,19 @@
         input[type="submit"]:hover {
             background-color: #45a049;
         }
+
+        #loading-icon {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            z-index: 9999;
+        }
     </style>
 </head>
 <body>
@@ -106,4 +119,43 @@
         </form>
         {% endif %}
     </div>
+
+    <!-- Loading icon -->
+    <div id="loading-icon" style="display: none;">
+        <img src="{{ url_for('static', filename='loading.gif') }}" alt="Loading...">
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const form = document.querySelector('form');
+            const loadingIcon = document.getElementById('loading-icon');
+
+            form.addEventListener('submit', function(event) {
+                event.preventDefault();
+
+                // Show the loading icon
+                loadingIcon.style.display = 'flex';
+
+                // Send the AJAX request
+                const formData = new FormData(form);
+                fetch('{{ url_for('load_directories') }}', {
+                    method: 'POST',
+                    body: formData
+                })
+                .then(response => response.text())
+                .then(data => {
+                    // Update the page with the new content
+                    document.body.innerHTML = data;
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                })
+                .finally(() => {
+                    // Hide the loading icon
+                    loadingIcon.style.display = 'none';
+                });
+            });
+        });
+    </script>
 </body>
+</html>
