@@ -15,6 +15,9 @@ if __name__ == '__main__':
     include = sys.argv[2]
     quality = sys.argv[3]
     delete = sys.argv[4]
+    telegram_token = sys.argv[5]
+    telegram_chatid = sys.argv[6]
+    version = sys.argv[7]
 
     OldFolderSizeBytes = 0
     NewFolderSizeBytes = 0
@@ -24,7 +27,7 @@ if __name__ == '__main__':
     FailedCount = 0
     SkippedCount = 0
 
-    Version = "4.6_web"
+    Version = version
     Logfilepath = "/logs"
     Date = datetime.now().strftime("%d-%m-%y_%H-%M-%S")
     Logfile = f"{Logfilepath}/transcode_{Date}.log"
@@ -36,9 +39,12 @@ if __name__ == '__main__':
 
     # Function for sending Telegram Message
     def send_telegram_message(message):
+        # Grab global telegram variables
+        global telegram_token, telegram_chatid
+
         # Telegram API Token and Chat ID
-        token = "5023514819:AAFeJygNEhJueBT4y1M_XppLdqWRmwUcrXQ"
-        chat_id = "-1001536638156"
+        token = telegram_token
+        chat_id = telegram_chatid
         #
         # Send the message
         url = f"https://api.telegram.org/bot{token}/sendMessage"
@@ -53,6 +59,7 @@ if __name__ == '__main__':
     else:
         log("Deleting files is disabled.")
 
+    log(f"Telegram token passed through is {telegram_token}.  ChatID is {telegram_chatid}")
     log("Defining functions...")
 
     log("get_files")

@@ -23,6 +23,11 @@
             color: #333;
             text-shadow: 0px 0px 5px #06b301;
         }
+        h2 {
+            text-align: right;
+            color: #333;
+            font-size: 12px;
+        }
         hr {
             border: 0;
             height: 3px;
@@ -61,10 +66,22 @@
 <body>
     <div class="container">
         <h1>x265 Transcoder</h1>
+        <h2>Version {{ version }}</h2>
         <hr>
         <form method="post" action="{{ url_for('run') }}">
             <label for="folder">Folder:</label>
-            <input type="text" id="folder" name="folder" value="{{ folder }}">
+            <select name="folder" id="folder">
+                {% for directory in directories %}
+                <option value="{{ directory.path }}">{{ directory.name }}</option>
+                {% if directory.subdirectories %}
+                <optgroup label="{{ directory.name }}">
+                    {% for subdirectory in directory.subdirectories %}
+                    <option value="{{ os.path.join(directory.path, subdirectory.name) }}">{{ subdirectory.name }}</option>
+                    {% endfor %}
+                </optgroup>
+                {% endif %}
+                {% endfor %}
+            </select>
             <label for="include">Include:</label>
             <input type="text" id="include" name="include" value="{{ include }}">
             <label for="quality">Choose a Quality:</label>
