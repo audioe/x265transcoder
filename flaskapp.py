@@ -39,8 +39,8 @@ def get_directories(parent_dir, directories=None):
 @app.route('/get_secret/<string:secret_name>')
 def get_secret(secret_name):
     try:
-        secret_value = config[secret_name]
-        return jsonify({'secret': secret_value})
+        secret_value = config['secrets'][secret_name]
+        return secret_value
     except KeyError:
         return jsonify({'error': 'Secret not found'}), 404
 
@@ -58,10 +58,10 @@ def run():
         include = request.form['include']
         quality = request.form['quality']
         delete = request.form['delete']
-        telegram_token = get_secret("TELEGRAM_TOKEN").get_json().get('secret')
-        telegram_chatid = get_secret("TELEGRAM_CHATID").get_json().get('secret')
+        telegram_token = get_secret("TELEGRAM_TOKEN")
+        telegram_chatid = get_secret("TELEGRAM_CHATID")
         # Call the x265transcoder.py script and pass the variables
-        subprocess.run(['python', 'x265transcoder.py', folder, include, quality, delete, telegram_token, telegram_chatid, version])
+        subprocess.run(['python', 'x265transcoder.py', folder, include, quality, delete, str(telegram_token), str(telegram_chatid), version])
         return "Success"
 
 if __name__ == '__main__':
