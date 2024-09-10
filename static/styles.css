@@ -142,3 +142,8 @@ input:checked + .slider:before {
     width: 100%;
     margin-right: 10px;
 }
+
+/* Radio buttons to choose Library type */
+.library-type {
+    margin-top: 10px;
+}

@@ -12,11 +12,11 @@
         <hr>
         <form method="post" action="{{ url_for('load_directories') }}">
             <label>What type of library are you looking to Transcode?:</label>
-            <div>
+            <div class="library-type">
                 <input type="radio" id="shows" name="parent_dir" value="{{ config['libraries']['shows'] }}">
                 <label for="shows">Shows</label>
             </div>
-            <div>
+            <div class="library-type">
                 <input type="radio" id="films" name="parent_dir" value="{{ config['libraries']['films'] }}">
                 <label for="films">Films</label>
             </div>
