@@ -73,6 +73,7 @@ input[type="submit"]:hover {
     display: inline-block;
     width: 60px;
     height: 34px;
+    margin-top: 5px;
 }
 
 .switch input { 
@@ -130,4 +131,14 @@ input:checked + .slider:before {
 
 #delete + .slider {
     border: 1px solid #ccc; /* Adjust the border width and color as desired */
+}
+.slider-container {
+    display: flex;
+    align-items: center;
+    margin-bottom: 0px;
+}
+
+#quality {
+    width: 100%;
+    margin-right: 10px;
 }
