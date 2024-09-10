@@ -138,6 +138,16 @@
         #delete + .slider {
             border: 1px solid #ccc; /* Adjust the border width and color as desired */
         }
+        .slider-container {
+            display: flex;
+            align-items: center;
+            margin-bottom: 0px;
+        }
+
+        #quality {
+            width: 100%;
+            margin-right: 10px;
+        }
     </style>
 </head>
 <body>
@@ -174,12 +184,10 @@
             <label for="include">Include:</label>
             <input type="text" id="include" name="include" value="{{ include }}">
             <label for="quality">Choose a Quality:</label>
-            <select name="quality" id="quality">
-                <option value="18">18 (Lossless)</option>
-                <option value="20">20</option>
-                <option value="23">23</option>
-                <option value="25">25 (Lossy)</option>
-            </select>
+            <div class="slider-container">
+                <input type="range" id="quality" name="quality" min="18" max="25" step="1" value="23" oninput="updateQualityValue(this.value)">
+                <span id="quality-value">23
+            </div>
             <label for="delete">Delete after Transcoding?</label>
             <label class="switch">
                 <input type="checkbox" id="delete" name="delete" value="Yes" checked>
@@ -195,6 +203,11 @@
         <img src="{{ url_for('static', filename='loading.gif') }}" alt="Loading...">
     </div>
 
+    <script>
+        function updateQualityValue(value) {
+            document.getElementById('quality-value').textContent = value;
+        }
+    </script>
     <script>
         document.addEventListener('DOMContentLoaded', function() {
             const form = document.querySelector('form');
