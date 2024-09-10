@@ -52,8 +52,28 @@ def index():
 @app.route('/load_directories', methods=['POST'])
 def load_directories():
     parent_dir = request.form.get('parent_dir', '/shows')
-    directories = get_directories(parent_dir)
+    directories = sorted([{'name': entry, 'path': os.path.join(parent_dir, entry)}
+                          for entry in os.listdir(parent_dir)
+                          if os.path.isdir(os.path.join(parent_dir, entry))], key=lambda x: x['name'].lower())
     html = render_template('index.html', directories=directories, version=version, os=os)
+    return html
+
+@app.route('/load_subdirectories', methods=['POST'])
+def load_subdirectories():
+    parent_dir = request.form.get('parent_dir')
+    current_dir = request.form.get('folder')
+
+    if current_dir:
+        subdirectories = sorted([{'name': entry, 'path': os.path.join(current_dir, entry)}
+                                 for entry in os.listdir(current_dir)
+                                 if os.path.isdir(os.path.join(current_dir, entry))], key=lambda x: x['name'].lower())
+        html = render_template('index.html', subdirectories=subdirectories, version=version, os=os, current_dir=current_dir, parent_dir=parent_dir)
+    else:
+        directories = sorted([{'name': entry, 'path': os.path.join(parent_dir, entry)}
+                              for entry in os.listdir(parent_dir)
+                              if os.path.isdir(os.path.join(parent_dir, entry))], key=lambda x: x['name'].lower())
+        html = render_template('index.html', directories=directories, version=version, os=os, current_dir=parent_dir, parent_dir=parent_dir)
+
     return html
 
 @app.route("/run", methods=["POST"])

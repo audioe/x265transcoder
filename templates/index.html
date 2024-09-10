@@ -147,22 +147,28 @@
         <hr>
         <form method="post" action="{{ url_for('load_directories') }}">
             <label for="parent_dir">Parent Directory:</label>
-            <input type="text" id="parent_dir" name="parent_dir" value="/shows">
+            <input type="text" id="parent_dir" name="parent_dir" value="{{ parent_dir or '/shows' }}">
             <input type="submit" value="Load Directories">
         </form>
+        
         {% if directories %}
-        <form method="post" action="{{ url_for('run') }}">
+        <form method="post" action="{{ url_for('load_subdirectories') }}">
+            <input type="hidden" id="parent_dir" name="parent_dir" value="{{ parent_dir or '/shows' }}">
             <label for="folder">Folder:</label>
             <select name="folder" id="folder">
                 {% for directory in directories %}
                 <option value="{{ directory.path }}">{{ directory.name }}</option>
-                {% if directory.subdirectories %}
-                <optgroup label="{{ directory.name }}">
-                    {% for subdirectory in directory.subdirectories %}
-                    <option value="{{ os.path.join(directory.path, subdirectory.name) }}">{{ subdirectory.name }}</option>
-                    {% endfor %}
-                </optgroup>
-                {% endif %}
+                {% endfor %}
+            </select>
+            <input type="submit" value="Load Subdirectories">
+        </form>
+        {% elif subdirectories %}
+        <p>Show selected: {{ current_dir.split('/')[-1] }}</p>
+        <form method="post" action="{{ url_for('run') }}">
+            <label for="folder">Folder:</label>
+            <select name="folder" id="folder">
+                {% for subdirectory in subdirectories %}
+                <option value="{{ subdirectory.path }}">{{ subdirectory.name }}</option>
                 {% endfor %}
             </select>
             <label for="include">Include:</label>
