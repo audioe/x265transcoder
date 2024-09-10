@@ -12,7 +12,7 @@ jobs:
       - name: add _Dev to version
         run: |
           current_version=$(cat version.txt)
-          dev_version = "${current_version}_dev"
+          dev_version="${current_version}_dev"
           echo "${dev_version}" > version.txt
 
       - name: Build Docker Image
