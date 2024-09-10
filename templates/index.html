@@ -11,11 +11,17 @@
         <h2>Version {{ version }}</h2>
         <hr>
         <form method="post" action="{{ url_for('load_directories') }}">
-            <label for="parent_dir">Parent Directory:</label>
-            <input type="text" id="parent_dir" name="parent_dir" value="{{ parent_dir or '/shows' }}">
+            <label>What type of library are you looking to Transcode?:</label>
+            <div>
+                <input type="radio" id="shows" name="parent_dir" value="{{ config['libraries']['shows'] }}">
+                <label for="shows">Shows</label>
+            </div>
+            <div>
+                <input type="radio" id="films" name="parent_dir" value="{{ config['libraries']['films'] }}">
+                <label for="films">Films</label>
+            </div>
             <input type="submit" value="Load Directories">
         </form>
-        
         {% if directories %}
         <form method="post" action="{{ url_for('load_subdirectories') }}">
             <input type="hidden" id="parent_dir" name="parent_dir" value="{{ parent_dir or '/shows' }}">
