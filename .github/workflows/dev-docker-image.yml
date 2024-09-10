@@ -9,6 +9,12 @@ jobs:
     steps:
       - uses: actions/checkout@v3
 
+      - name: add _Dev to version
+        run: |
+          current_version=$(cat version.txt)
+          dev_version = "${current_version}_dev"
+          echo "$dev_version" > version.txt
+
       - name: Build Docker Image
         run: docker build . --tag audioe/x265transcoder:dev
 
