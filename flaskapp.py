@@ -62,7 +62,9 @@ def run():
         folder = str(request.form['folder'])
         include = request.form['include']
         quality = request.form['quality']
-        delete = request.form['delete']
+        # Get delete toggle value.  Use 'No' as the default value if 'delete' is not present
+        delete = request.form.get('delete', 'No')
+        # Get Telegram secrets
         telegram_token = get_secret("TELEGRAM_TOKEN")
         telegram_chatid = get_secret("TELEGRAM_CHATID")
         # Call the x265transcoder.py script and pass the variables
