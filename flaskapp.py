@@ -47,7 +47,7 @@ def get_secret(secret_name):
 # Route to render the HTML page
 @app.route('/')
 def index():
-    return render_template('index.html', version=version, os=os)
+    return render_template('index.html', version=version, os=os, config=config)
 
 @app.route('/load_directories', methods=['POST'])
 def load_directories():
@@ -55,7 +55,7 @@ def load_directories():
     directories = sorted([{'name': entry, 'path': os.path.join(parent_dir, entry)}
                           for entry in os.listdir(parent_dir)
                           if os.path.isdir(os.path.join(parent_dir, entry))], key=lambda x: x['name'].lower())
-    html = render_template('index.html', directories=directories, version=version, os=os)
+    html = render_template('index.html', directories=directories, version=version, os=os, config=config)
     return html
 
 @app.route('/load_subdirectories', methods=['POST'])
@@ -67,12 +67,12 @@ def load_subdirectories():
         subdirectories = sorted([{'name': entry, 'path': os.path.join(current_dir, entry)}
                                  for entry in os.listdir(current_dir)
                                  if os.path.isdir(os.path.join(current_dir, entry))], key=lambda x: x['name'].lower())
-        html = render_template('index.html', subdirectories=subdirectories, version=version, os=os, current_dir=current_dir, parent_dir=parent_dir)
+        html = render_template('index.html', subdirectories=subdirectories, version=version, os=os, current_dir=current_dir, parent_dir=parent_dir, config=config)
     else:
         directories = sorted([{'name': entry, 'path': os.path.join(parent_dir, entry)}
                               for entry in os.listdir(parent_dir)
                               if os.path.isdir(os.path.join(parent_dir, entry))], key=lambda x: x['name'].lower())
-        html = render_template('index.html', directories=directories, version=version, os=os, current_dir=parent_dir, parent_dir=parent_dir)
+        html = render_template('index.html', directories=directories, version=version, os=os, current_dir=parent_dir, parent_dir=parent_dir, config=config)
 
     return html
 

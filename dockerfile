@@ -38,7 +38,10 @@ RUN \
     && apt-get install -y jellyfin-ffmpeg6
 
 # Install gpu dependencies
-RUN apt update && apt install -y onevpl-tools vainfo intel-media-va-driver-non-free
+RUN apt install -y onevpl-tools vainfo intel-media-va-driver-non-free
+
+# Install nano to help with troubleshooting and testing
+RUN apt install -y nano
 
 # Copy Python script and webpage files
 COPY . .
