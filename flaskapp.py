@@ -60,7 +60,7 @@ def load_directories():
             'name': entry,
             'path': os.path.join(parent_dir, entry)
         } for entry in os.listdir(parent_dir) if os.path.isdir(os.path.join(parent_dir, entry))], key=lambda x: x['name'].lower())
-        html = render_template('index.html', subdirectories=subdirectories, version=version, os=os, current_dir=parent_dir, parent_dir=parent_dir, config=config)
+        html = render_template('index.html', subdirectories=subdirectories, version=version, os=os, current_dir=parent_dir, parent_dir=parent_dir, config=config, films='films')
     else:
         # If the selected parent directory is for shows, render the folder selection form
         directories = sorted([{'name': entry, 'path': os.path.join(parent_dir, entry)}
@@ -78,12 +78,12 @@ def load_subdirectories():
         subdirectories = sorted([{'name': entry, 'path': os.path.join(current_dir, entry)}
                                  for entry in os.listdir(current_dir)
                                  if os.path.isdir(os.path.join(current_dir, entry))], key=lambda x: x['name'].lower())
-        html = render_template('index.html', subdirectories=subdirectories, version=version, os=os, current_dir=current_dir, parent_dir=parent_dir, config=config, films='films')
+        html = render_template('index.html', subdirectories=subdirectories, version=version, os=os, current_dir=current_dir, parent_dir=parent_dir, config=config, shows='shows')
     else:
         directories = sorted([{'name': entry, 'path': os.path.join(parent_dir, entry)}
                               for entry in os.listdir(parent_dir)
                               if os.path.isdir(os.path.join(parent_dir, entry))], key=lambda x: x['name'].lower())
-        html = render_template('index.html', directories=directories, version=version, os=os, current_dir=parent_dir, parent_dir=parent_dir, config=config, shows='shows')
+        html = render_template('index.html', directories=directories, version=version, os=os, current_dir=parent_dir, parent_dir=parent_dir, config=config)
 
     return html
 
