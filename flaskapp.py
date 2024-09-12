@@ -44,10 +44,22 @@ def get_secret(secret_name):
     except KeyError:
         return jsonify({'error': 'Secret not found'}), 404
 
+def transcode_check(keyword):
+    try:
+        output = subprocess.check_output(["ps", "aux"], text=True)
+        lines = output.splitlines()
+        for line in lines:
+            if keyword in line:
+                return True
+        return False
+    except subprocess.CalledProcessError:
+        return False
+
 # Route to render the HTML page
 @app.route('/')
 def index():
-    return render_template('index.html', version=version, os=os, config=config)
+    transcoder_status = transcode_check('ffmpeg')
+    return render_template('index.html', version=version, os=os, config=config, transcoder_status=transcoder_status)
 
 @app.route('/load_directories', methods=['POST'])
 def load_directories():

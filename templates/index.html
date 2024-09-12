@@ -10,6 +10,9 @@
         <h1>x265 Transcoder</h1>
         <h2>Version {{ version }}</h2>
         <hr>
+        {% if transcoder_status == True %}
+        <p>There is already a transcode job running</p>
+        {% else %}
         <form method="post" action="{{ url_for('load_directories') }}">
             <label>What type of library are you looking to Transcode?:</label>
             <div class="library-type">
@@ -22,6 +25,7 @@
             </div>
             <input type="submit" value="Load Directories">
         </form>
+        {% endif %}
         {% if directories %}
         <form method="post" action="{{ url_for('load_subdirectories') }}">
             <input type="hidden" id="parent_dir" name="parent_dir" value="{{ parent_dir or '/shows' }}">
@@ -48,7 +52,10 @@
             </select>
             <label for="include">Include:</label>
             <input type="text" id="include" name="include" value="{{ include }}">
-            <label for="quality">Choose a Quality:</label>
+            <label for="quality" class="tooltip-label">
+                Choose a Quality:
+                <span class="info-icon" title="This sets the quality of the transcoded video. 18 is considered the best quality, but largest resulting file size. 25 would result in the smallest file size, but may be visually noticeable. 23 is a solid middle-ground for quality vs file size if unsure."></span>
+            </label>
             <div class="slider-container">
                 <input type="range" id="quality" name="quality" min="18" max="25" step="1" value="23" oninput="updateQualityValue(this.value)">
                 <span id="quality-value">23
