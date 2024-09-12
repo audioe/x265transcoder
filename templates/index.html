@@ -25,7 +25,7 @@
             </div>
             <input type="submit" value="Load Directories">
         </form>
-        { endif }
+        {% endif %}
         {% if directories %}
         <form method="post" action="{{ url_for('load_subdirectories') }}">
             <input type="hidden" id="parent_dir" name="parent_dir" value="{{ parent_dir or '/shows' }}">
