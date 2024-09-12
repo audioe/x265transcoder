@@ -11,7 +11,12 @@
         <h2>Version {{ version }}</h2>
         <hr>
         {% if transcoder_status == True %}
-        <p>There is already a transcode job running</p>
+        {% if job | contains("films") %}
+        <p>There is already a transcode job in progress for a Film:</p>
+        {% else %}
+        <p>There is already a transcode job in progress for a TV Show:</p>
+        <p>{{ job }}</p>
+        {% endif %}
         {% else %}
         <form method="post" action="{{ url_for('load_directories') }}">
             <label>What type of library are you looking to Transcode?:</label>

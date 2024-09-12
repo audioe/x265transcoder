@@ -36,6 +36,7 @@ def get_directories(parent_dir, directories=None):
     directories.sort(key=lambda d: d['name'])  # Sort top-level directories alphabetically
     return directories
 
+# Function to get secrets
 @app.route('/get_secret/<string:secret_name>')
 def get_secret(secret_name):
     try:
@@ -44,6 +45,7 @@ def get_secret(secret_name):
     except KeyError:
         return jsonify({'error': 'Secret not found'}), 404
 
+# Function to determine if a Transcode job is already running
 def transcode_check(keyword):
     try:
         output = subprocess.check_output(["ps", "aux"], text=True)
@@ -55,12 +57,23 @@ def transcode_check(keyword):
     except subprocess.CalledProcessError:
         return False
 
+# Function to store the directory that will be transcoded
+def store_job(job_data):
+    with open('job.config', 'a') as f:
+        # Append the job data to the file
+        f.write(job_data)
+
 # Route to render the HTML page
 @app.route('/')
 def index():
     transcoder_status = transcode_check('ffmpeg')
-    return render_template('index.html', version=version, os=os, config=config, transcoder_status=transcoder_status)
+    job = ""
+    if transcoder_status == True:
+        with open('job.config', 'r') as f:
+            job = f.read().strip()
+    return render_template('index.html', version=version, os=os, config=config, transcoder_status=transcoder_status, job=job)
 
+# Route to handle loading directories
 @app.route('/load_directories', methods=['POST'])
 def load_directories():
     parent_dir = request.form.get('parent_dir', '/shows')
@@ -81,6 +94,7 @@ def load_directories():
         html = render_template('index.html', directories=directories, version=version, os=os, config=config)
     return html
 
+# Route to handle loading subdirectories (for TV shows)
 @app.route('/load_subdirectories', methods=['POST'])
 def load_subdirectories():
     parent_dir = request.form.get('parent_dir')
@@ -99,6 +113,7 @@ def load_subdirectories():
 
     return html
 
+# Route to handle running the Transcoder
 @app.route("/run", methods=["POST"])
 def run():
     if request.method == 'POST':
@@ -110,6 +125,8 @@ def run():
         # Get Telegram secrets
         telegram_token = get_secret("TELEGRAM_TOKEN")
         telegram_chatid = get_secret("TELEGRAM_CHATID")
+        # Store the job data in job.config
+        store_job(folder)
         # Call the x265transcoder.py script and pass the variables
         subprocess.run(['python', 'x265transcoder.py', folder, include, quality, delete, str(telegram_token), str(telegram_chatid), version])
         return "Success"
