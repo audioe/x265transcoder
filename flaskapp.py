@@ -73,13 +73,13 @@ def store_job(job_data):
         with open(filename, 'r') as f:
             data = yaml.safe_load(f)
         data['job_directory'] = f"{job_data}"
-        data['progress'] = "0%"
+        data['progress'] = "0"
         with open(filename, 'w') as f:
             yaml.dump(data, f, default_flow_style=False)
     except FileNotFoundError:
         # Create the YAML file if it doesn't exist
         data = {'job_directory': job_data}
-        data = {'progress': "0%"}
+        data = {'progress': "0"}
         with open(filename, 'w') as f:
             yaml.dump(data, f, default_flow_style=False)
 

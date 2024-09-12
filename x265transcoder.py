@@ -62,7 +62,7 @@ if __name__ == '__main__':
         filename = "/config/job.yaml"
         with open(filename, 'r') as f:
             data = yaml.safe_load(f)
-        data['progress'] = f"{progress}%"
+        data['progress'] = f"{progress}"
         with open(filename, 'w') as f:
             yaml.dump(data, f, default_flow_style=False)
 

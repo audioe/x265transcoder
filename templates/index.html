@@ -17,7 +17,11 @@
         {% else %}
         <p>There is already a transcode job in progress for a TV Show:</p>
         <p>Directory: {{ job_directory }}</p>
-        <p>Progress: {{ job_progress }}</p>
+        <label for="progress">Progress:</label>
+        <div class="progress-container">
+            <progress id="progress" value={{ job_progress }} max="100"></progress>
+            <span class="progress-text">{{ job_progress }}%
+        </div>
         {% endif %}
         {% else %}
         <form method="post" action="{{ url_for('load_directories') }}">
