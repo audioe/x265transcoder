@@ -13,6 +13,15 @@ with open('version.txt', 'r') as f:
 with open('/config/config.yaml', 'r') as f:
     config = yaml.safe_load(f)
 
+# Load the /config/job.yaml file
+job_directory = ''
+job_progress = ''
+if os.path.exists('/config/job.yaml'):
+    with open('/config/job.yaml', 'r') as f:
+        job_config = yaml.safe_load(f)
+        job_directory = job_config.get('job_directory', '')
+        job_progress = job_config.get('progress', '')
+
 # Function to get list of directories
 def get_directories(parent_dir, directories=None):
     if directories is None:
@@ -57,21 +66,41 @@ def transcode_check(keyword):
     except subprocess.CalledProcessError:
         return False
 
-# Function to store the directory that will be transcoded
+# Function to store the directory that will be transcoded to /config/job.yaml
 def store_job(job_data):
-    with open('job.config', 'a') as f:
-        # Append the job data to the file
-        f.write(job_data)
+    filename = "/config/job.yaml"
+    try:
+        with open(filename, 'r') as f:
+            data = yaml.safe_load(f)
+        data['job_directory'] = f"{job_data}"
+        data['progress'] = "0%"
+        with open(filename, 'w') as f:
+            yaml.dump(data, f, default_flow_style=False)
+    except FileNotFoundError:
+        # Create the YAML file if it doesn't exist
+        data = {'job_directory': job_data}
+        data = {'progress': "0%"}
+        with open(filename, 'w') as f:
+            yaml.dump(data, f, default_flow_style=False)
+
+
+#def store_job(job_data):
+#    with open('job.config', 'a') as f:
+#        # Append the job data to the file
+#        f.write(job_data)
 
 # Route to render the HTML page
 @app.route('/')
 def index():
     transcoder_status = transcode_check('ffmpeg')
-    job = ""
+    job_directory = ''
+    job_progress = ''
     if transcoder_status == True:
-        with open('job.config', 'r') as f:
-            job = f.read().strip()
-    return render_template('index.html', version=version, os=os, config=config, transcoder_status=transcoder_status, job=job)
+        with open('/config/job.yaml', 'r') as f:
+            job_config = yaml.safe_load(f)
+            job_directory = job_config.get('job_directory', '')
+            job_progress = job_config.get('progress', '')
+    return render_template('index.html', version=version, os=os, config=config, transcoder_status=transcoder_status, job_directory=job_directory, job_progress=job_progress)
 
 # Route to handle loading directories
 @app.route('/load_directories', methods=['POST'])

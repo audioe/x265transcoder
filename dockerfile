@@ -49,5 +49,8 @@ COPY . .
 # Expose port for the Flask app
 EXPOSE 5000
 
+# Change permissions on config directory
+RUN chmod 777 /config
+
 # Run the Flask app (replace 'yourapp' with your script name)
 CMD ["python", "flaskapp.py"]
