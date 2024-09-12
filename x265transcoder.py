@@ -247,7 +247,7 @@ if __name__ == '__main__':
         else:
             log(f"All Jobs Succeeded: {Successful}")
             log ("Sending Telegram Message...")
-        send_telegram_message (f"Transcode Job for {mediafolder} completed successfully.\n\n{SuccessfulCount} Succeeded | {FailedCount} Failed | {SkippedCount} Skipped")
+        send_telegram_message (f"Transcode Job for {mediafolder} completed successfully.\n\n{SuccessfulCount} Succeeded | {SkippedCount} Skipped\n\nOriginal Directory Size: {oldfoldersize} GB\nNew Directory Size: {newfoldersize} GB\nSpace Saved: {folderpercdiff}%")
 
     log("done.")
 
