@@ -2,6 +2,7 @@ import sys
 import subprocess
 import shutil
 import os
+import yaml
 from datetime import datetime
 import requests
 from pymediainfo import MediaInfo
@@ -51,6 +52,19 @@ if __name__ == '__main__':
         data = {"chat_id": chat_id, "text": message}
         response = requests.post(url, data=data)
         return response
+    
+    # Function for updating the progress
+    def update_progress_yaml(progress):
+        """Updates the progress in a YAML file.
+        Args:
+            progress: The progress percentage.
+        """
+        filename = "/config/job.yaml"
+        with open(filename, 'r') as f:
+            data = yaml.safe_load(f)
+        data['progress'] = f"{progress}%"
+        with open(filename, 'w') as f:
+            yaml.dump(data, f, default_flow_style=False)
 
     # MAIN
     log(f"Starting Script Version {Version}.  Working in {mediafolder}, and looking for {include}")
@@ -118,10 +132,14 @@ if __name__ == '__main__':
         log("done.")
         #For HW Encoding, use "-rc_mode CQP -global_quality 18" instead of crf
         params = f"repeat-headers=1:profile=main10:level=5.1"
-        for file_path in file_list:
+
+        total_files = len(file_list)
+        progress_percentage = 0
+        for i, file_path in enumerate(file_list):
             log(" ")
             jobfailed = ""
             jobsuccessful = ""
+            log("")
             convertedname = os.path.basename(file_path)
             filetitle = convertedname
             amendedname_path = file_path + "_old"
@@ -234,6 +252,10 @@ if __name__ == '__main__':
                 log("This is an x265 file.  Skipping")
                 NewFolderSizeBytes += filesizeinbytes
                 SkippedCount += 1
+            
+            progress_percentage = int((i + 1) / total_files * 100)
+            log(f"Progress: {progress_percentage}%")
+            update_progress_yaml(progress_percentage)
         
         oldfoldersize = round(OldFolderSizeBytes / (1024*1024*1024), 2)
         newfoldersize = round(NewFolderSizeBytes / (1024*1024*1024), 2)
@@ -247,7 +269,7 @@ if __name__ == '__main__':
         else:
             log(f"All Jobs Succeeded: {Successful}")
             log ("Sending Telegram Message...")
-        send_telegram_message (f"Transcode Job for {mediafolder} completed successfully.\n\n{SuccessfulCount} Succeeded | {FailedCount} Failed | {SkippedCount} Skipped")
+        send_telegram_message (f"Transcode Job for {mediafolder} completed successfully.\n\n{SuccessfulCount} Succeeded | {SkippedCount} Skipped\n\nOriginal Directory Size: {oldfoldersize} GB\nNew Directory Size: {newfoldersize} GB\nSpace Saved: {folderpercdiff}%")
 
     log("done.")
 
