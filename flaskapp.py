@@ -52,10 +52,21 @@ def index():
 @app.route('/load_directories', methods=['POST'])
 def load_directories():
     parent_dir = request.form.get('parent_dir', '/shows')
-    directories = sorted([{'name': entry, 'path': os.path.join(parent_dir, entry)}
-                          for entry in os.listdir(parent_dir)
-                          if os.path.isdir(os.path.join(parent_dir, entry))], key=lambda x: x['name'].lower())
-    html = render_template('index.html', directories=directories, version=version, os=os, config=config)
+    is_films = parent_dir == config['libraries']['films']
+
+    if is_films:
+        # If the selected parent directory is for films, render the final form directly
+        subdirectories = sorted([{
+            'name': entry,
+            'path': os.path.join(parent_dir, entry)
+        } for entry in os.listdir(parent_dir) if os.path.isdir(os.path.join(parent_dir, entry))], key=lambda x: x['name'].lower())
+        html = render_template('index.html', subdirectories=subdirectories, version=version, os=os, current_dir=parent_dir, parent_dir=parent_dir, config=config, films='films')
+    else:
+        # If the selected parent directory is for shows, render the folder selection form
+        directories = sorted([{'name': entry, 'path': os.path.join(parent_dir, entry)}
+                            for entry in os.listdir(parent_dir)
+                            if os.path.isdir(os.path.join(parent_dir, entry))], key=lambda x: x['name'].lower())
+        html = render_template('index.html', directories=directories, version=version, os=os, config=config)
     return html
 
 @app.route('/load_subdirectories', methods=['POST'])
@@ -67,7 +78,7 @@ def load_subdirectories():
         subdirectories = sorted([{'name': entry, 'path': os.path.join(current_dir, entry)}
                                  for entry in os.listdir(current_dir)
                                  if os.path.isdir(os.path.join(current_dir, entry))], key=lambda x: x['name'].lower())
-        html = render_template('index.html', subdirectories=subdirectories, version=version, os=os, current_dir=current_dir, parent_dir=parent_dir, config=config)
+        html = render_template('index.html', subdirectories=subdirectories, version=version, os=os, current_dir=current_dir, parent_dir=parent_dir, config=config, shows='shows')
     else:
         directories = sorted([{'name': entry, 'path': os.path.join(parent_dir, entry)}
                               for entry in os.listdir(parent_dir)

@@ -34,7 +34,11 @@
             <input type="submit" value="Load Subdirectories">
         </form>
         {% elif subdirectories %}
-        <p>Show selected: {{ current_dir.split('/')[-1] }}</p>
+        {% if shows %}
+        <p>Show selected: <span style="font-weight: bold; font-size: 1.2em;">{{ current_dir.split('/')[-1] }}</span></p>
+        {% elif films %}
+        <p>Select a Film directory:</p>
+        {% endif %}
         <form method="post" action="{{ url_for('run') }}">
             <label for="folder">Folder:</label>
             <select name="folder" id="folder">

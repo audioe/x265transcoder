@@ -156,9 +156,9 @@ if __name__ == '__main__':
                     outputfile = file_path
 
                 log(f"Transcode config:   Quality={quality}")
-                if "films" in mediafolder:
-                    log("We're encoding a film to 10 Bit, will add this to output file name")
-                    outputfile = outputfile.replace('.mkv', '-10bit.mkv')
+                #if "films" in mediafolder:
+                #    log("We're encoding a film to 10 Bit, will add this to output file name")
+                #    outputfile = outputfile.replace('.mkv', '-10bit.mkv')
 
                 log(f"Output file path will be: {outputfile}")
                 log("Beginning transcode...")
