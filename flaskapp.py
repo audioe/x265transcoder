@@ -10,8 +10,11 @@ with open('version.txt', 'r') as f:
     version = f.read().strip()
 
 # Load the configuration file
-with open('/config/config.yaml', 'r') as f:
-    config = yaml.safe_load(f)
+if os.path.exists('/config/config.yaml'):
+    with open('/config/config.yaml', 'r') as f:
+        config = yaml.safe_load(f)
+else:
+    config_present = "False"
 
 # Load the /config/job.yaml file
 job_directory = ''
@@ -73,13 +76,13 @@ def store_job(job_data):
         with open(filename, 'r') as f:
             data = yaml.safe_load(f)
         data['job_directory'] = f"{job_data}"
-        data['progress'] = "0%"
+        data['progress'] = "0"
         with open(filename, 'w') as f:
             yaml.dump(data, f, default_flow_style=False)
     except FileNotFoundError:
         # Create the YAML file if it doesn't exist
         data = {'job_directory': job_data}
-        data = {'progress': "0%"}
+        data = {'progress': "0"}
         with open(filename, 'w') as f:
             yaml.dump(data, f, default_flow_style=False)
 
