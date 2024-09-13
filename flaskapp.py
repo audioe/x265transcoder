@@ -10,8 +10,11 @@ with open('version.txt', 'r') as f:
     version = f.read().strip()
 
 # Load the configuration file
-with open('/config/config.yaml', 'r') as f:
-    config = yaml.safe_load(f)
+if os.path.exists('/config/config.yaml'):
+    with open('/config/config.yaml', 'r') as f:
+        config = yaml.safe_load(f)
+else:
+    config_present = "False"
 
 # Load the /config/job.yaml file
 job_directory = ''
