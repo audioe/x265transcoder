@@ -55,7 +55,7 @@ if __name__ == '__main__':
         return response
     
     # Function for updating the progress
-    def update_progress_yaml(progress):
+    def update_progress_yaml(item, progress):
         """Updates the progress in a YAML file.
         Args:
             progress: The progress percentage.
@@ -63,7 +63,7 @@ if __name__ == '__main__':
         filename = "/config/job.yaml"
         with open(filename, 'r') as f:
             data = yaml.safe_load(f)
-        data['progress'] = f"{progress}"
+        data[item] = f"{progress}"
         with open(filename, 'w') as f:
             yaml.dump(data, f, default_flow_style=False)
 
@@ -197,7 +197,7 @@ if __name__ == '__main__':
                     "-global_quality", f"{quality}",
                     "-c:a", "copy",
                     "-preset", "fast",
-                    "-stats_period", "30",
+                    "-stats_period", "5",
                     outputfile
                 ],stdout=subprocess.PIPE, stderr=subprocess.STDOUT, universal_newlines=True)
 
@@ -211,7 +211,7 @@ if __name__ == '__main__':
 
                         file_progress_percentage = int((frame_number) / fileframecount * 100)
                         log(f"File Progress: {file_progress_percentage}%")
-                        #update_progress_yaml(progress_percentage)
+                        update_progress_yaml("file_progress", file_progress_percentage)
 
                 newfilesizeinbytes = os.path.getsize(outputfile)
                 NewFolderSizeBytes += newfilesizeinbytes
@@ -269,7 +269,7 @@ if __name__ == '__main__':
             
             progress_percentage = int((i + 1) / total_files * 100)
             log(f"Progress: {progress_percentage}%")
-            update_progress_yaml(progress_percentage)
+            update_progress_yaml("job_progress", progress_percentage)
         
         oldfoldersize = round(OldFolderSizeBytes / (1024*1024*1024), 2)
         newfoldersize = round(NewFolderSizeBytes / (1024*1024*1024), 2)
