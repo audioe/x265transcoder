@@ -5,6 +5,7 @@ import os
 import yaml
 from datetime import datetime
 import requests
+import re
 from pymediainfo import MediaInfo
 
 if __name__ == '__main__':
@@ -181,7 +182,7 @@ if __name__ == '__main__':
                 log(f"Output file path will be: {outputfile}")
                 log("Beginning transcode...")
                 starttime = datetime.now()
-                subprocess.run([
+                process = subprocess.Popen([
                     "/usr/lib/jellyfin-ffmpeg/ffmpeg",
                     "-c:v", "h264_qsv",
                     "-i", f"{file_path}_old",
@@ -196,8 +197,21 @@ if __name__ == '__main__':
                     "-global_quality", f"{quality}",
                     "-c:a", "copy",
                     "-preset", "fast",
+                    "-stats_period", "30",
                     outputfile
-                ])
+                ],stdout=subprocess.PIPE, stderr=subprocess.STDOUT, universal_newlines=True)
+
+                for line in process.stdout:
+                    # Use a regular expression to match the frame number
+                    match = re.search(r"frame= (\d+)", line)
+
+                    if match:
+                        frame_number = int(match.group(1))
+                        log(f"Working on Frame {frame_number} of {fileframecount}")
+
+                        file_progress_percentage = int((frame_number) / fileframecount * 100)
+                        log(f"File Progress: {file_progress_percentage}%")
+                        #update_progress_yaml(progress_percentage)
 
                 newfilesizeinbytes = os.path.getsize(outputfile)
                 NewFolderSizeBytes += newfilesizeinbytes
