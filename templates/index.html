@@ -17,7 +17,12 @@
         {% else %}
         <p>There is already a transcode job in progress for a TV Show:</p>
         <p>Directory: {{ job_directory }}</p>
-        <label for="progress">Progress:</label>
+        <label for="file-progress">File Progress:</label>
+        <div class="progress-container">
+            <progress id="file-progress" value={{ file_progress }} max="100"></progress>
+            <span class="progress-text">{{ file_progress }}%
+        </div>
+        <label for="progress">Overall Job Progress:</label>
         <div class="progress-container">
             <progress id="progress" value={{ job_progress }} max="100"></progress>
             <span class="progress-text">{{ job_progress }}%

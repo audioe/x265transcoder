@@ -1,0 +1,6 @@
+secrets:
+  TELEGRAM_TOKEN: <token>
+  TELEGRAM_CHATID: <chatid>
+libraries:
+  shows: <shows_directory>
+  films: <films_directory>
