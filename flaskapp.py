@@ -100,11 +100,13 @@ def index():
     transcoder_status = transcode_check('ffmpeg')
     job_directory = ''
     job_progress = ''
+    file_progress = ''
     if transcoder_status == True:
         with open('/config/job.yaml', 'r') as f:
             job_config = yaml.safe_load(f)
             job_directory = job_config.get('job_directory', '')
-            job_progress = job_config.get('progress', '')
+            job_progress = job_config.get('job_progress', '')
+            file_progress = job_config.get('file_progress', '')
     return render_template('index.html', version=version, os=os, config=config, transcoder_status=transcoder_status, job_directory=job_directory, job_progress=job_progress, file_progress=file_progress)
 
 # Route to handle loading directories
