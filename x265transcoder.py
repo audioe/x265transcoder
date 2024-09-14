@@ -214,14 +214,14 @@ if __name__ == '__main__':
                         frame_number = int(match.group(1))
                         logging.debug(f"Working on Frame {frame_number} of {fileframecount}")
 
-                        file_progress_percentage = int((frame_number) / fileframecount * 100)
+                        file_progress_percentage = round(int((frame_number) / fileframecount * 100))
                         logging.debug(f"File Progress: {file_progress_percentage}%")
                         update_progress_yaml("file_progress", file_progress_percentage)
 
                         if progress_percentage == 0:
-                            job_progress_percentage = ((progress_percentage_next_step - progress_percentage)/100) * file_progress_percentage
+                            job_progress_percentage = round(((progress_percentage_next_step - progress_percentage)/100) * file_progress_percentage)
                         else:
-                            job_progress_percentage = progress_percentage + (((progress_percentage_next_step - progress_percentage)/100) * file_progress_percentage)
+                            job_progress_percentage = round(progress_percentage + (((progress_percentage_next_step - progress_percentage)/100) * file_progress_percentage))
                             
                         logging.debug(f"Job Progress: {job_progress_percentage}%")
                         update_progress_yaml("job_progress", job_progress_percentage)
