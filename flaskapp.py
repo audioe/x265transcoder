@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, jsonify
+from flask import Flask, render_template, request, jsonify, redirect, url_for
 import subprocess
 import os
 import yaml
@@ -70,6 +70,18 @@ def transcode_check(keyword):
         return False
     except subprocess.CalledProcessError:
         return False
+    
+def update_progress_yaml(item, progress):
+    """Updates the progress in a YAML file.
+    Args:
+        progress: The progress percentage.
+    """
+    filename = "/config/job.yaml"
+    with open(filename, 'r') as f:
+        data = yaml.safe_load(f)
+    data[item] = f"{progress}"
+    with open(filename, 'w') as f:
+        yaml.dump(data, f, default_flow_style=False)
 
 # Function to store the directory that will be transcoded to /config/job.yaml
 def store_job(job_data):
@@ -97,17 +109,35 @@ def store_job(job_data):
 # Route to render the HTML page
 @app.route('/')
 def index():
-    transcoder_status = transcode_check('ffmpeg')
+    transcoder_status = transcode_check('x265transcoder.py')
     job_directory = ''
     job_progress = ''
     file_progress = ''
+    current_file_number = ''
+    current_file = ''
+    total_files = ''
     if transcoder_status == True:
         with open('/config/job.yaml', 'r') as f:
             job_config = yaml.safe_load(f)
             job_directory = job_config.get('job_directory', '')
             job_progress = job_config.get('job_progress', '')
             file_progress = job_config.get('file_progress', '')
-    return render_template('index.html', version=version, os=os, config=config, transcoder_status=transcoder_status, job_directory=job_directory, job_progress=job_progress, file_progress=file_progress)
+            try:
+                current_file_number = job_config.get('current_file_number', '')
+            except:
+                current_file_number = "Loading..."
+                pass
+            try:
+                current_file = job_config.get('current_file', '')
+            except:
+                current_file = "Loading..."
+                pass
+            try:
+                total_files = job_config.get('total_files', '')
+            except:
+                total_files = "Loading..."
+                pass
+    return render_template('index.html', version=version, os=os, config=config, transcoder_status=transcoder_status, job_directory=job_directory, job_progress=job_progress, file_progress=file_progress, current_file_number=current_file_number, current_file=current_file, total_files=total_files)
 
 # Route to handle loading directories
 @app.route('/load_directories', methods=['POST'])
@@ -164,8 +194,10 @@ def run():
         # Store the job data in job.config
         store_job(folder)
         # Call the x265transcoder.py script and pass the variables
-        subprocess.run(['python', 'x265transcoder.py', folder, include, quality, delete, str(telegram_token), str(telegram_chatid), version])
-        return "Success"
-
+        subprocess.Popen(['python', 'x265transcoder.py', folder, include, quality, delete, str(telegram_token), str(telegram_chatid), version])
+        update_progress_yaml("job_progress", 0)
+        update_progress_yaml("file_progress", 0)
+        return redirect(url_for('index'))
+    
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0')

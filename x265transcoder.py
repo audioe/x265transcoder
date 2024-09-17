@@ -39,6 +39,18 @@ if __name__ == '__main__':
     Logfile = f"{Logfilepath}/transcode_{Date}.log"
     logging.basicConfig(format='%(levelname)s | %(asctime)s: %(message)s', datefmt='%d/%m/%Y %I:%M:%S %p', filename=Logfile, encoding='utf-8', level=logging.DEBUG)
 
+    def store_job(item, job_data):
+        logging.debug(f"Storing {item}: {job_data} in /config/job.yaml")
+        filename = "/config/job.yaml"
+        try:
+            with open(filename, 'r') as f:
+                data = yaml.safe_load(f)
+            data[item] = f"{job_data}"
+            with open(filename, 'w') as f:
+                yaml.dump(data, f, default_flow_style=False)
+        except FileNotFoundError:
+            return
+
     # Function for sending Telegram Message
     def send_telegram_message(message):
         # Grab global telegram variables
@@ -113,6 +125,7 @@ if __name__ == '__main__':
     logging.info("Done.")
     logging.info("Fetching file list...")
     file_list = get_files(mediafolder, include)
+    logging.debug(f"File list is: {file_list}")
 
     logging.info("Done.")
     logging.info("Creating convert job function...")
@@ -135,16 +148,17 @@ if __name__ == '__main__':
         params = f"repeat-headers=1:profile=main10:level=5.1"
 
         total_files = len(file_list)
+        store_job("total_files", total_files)
         progress_percentage = 0
-        update_progress_yaml("job_progress", 0)
-        update_progress_yaml("file_progress", 0)
         for i, file_path in enumerate(file_list):
+            store_job("current_file_number", i+1)
             logging.info(" ")
             jobfailed = ""
             jobsuccessful = ""
             logging.info("")
             convertedname = os.path.basename(file_path)
             filetitle = convertedname
+            store_job("current_file", filetitle)
             amendedname_path = file_path + "_old"
             logging.info(f"Working on file: {convertedname}.")
             logging.debug(f"File path: {file_path}")
