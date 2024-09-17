@@ -19,7 +19,7 @@ WORKDIR /app
 # Install dependencies (assuming you have a requirements.txt)
 COPY requirements.txt .
 RUN pip install -r requirements.txt
-RUN pip3 install -r ffmpeg-progress-yield
+RUN pip3 install ffmpeg-progress-yield
 
 # Prepare Jellyfin repository (using environment variables)
 RUN \
