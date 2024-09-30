@@ -11,22 +11,28 @@
         <h2>Version {{ version }}</h2>
         <hr>
         {% if transcoder_status == True %}
+        <meta http-equiv="refresh" content="5">
         {% if "films" in job %}
         <p>There is already a transcode job in progress for a Film:</p>
         <p>Directory: {{ job_directory }}</p>
         {% else %}
         <p>There is already a transcode job in progress for a TV Show:</p>
         <p>Directory: {{ job_directory }}</p>
+        {% if "Loading" in current_file %}
+        <p>Progress will be shown shortly once the job is underway...</p>
+        {% else %}
+        <p>Working on {{ current_file }}, item {{ current_file_number }} of {{ total_files }}</p>
         <label for="file-progress">File Progress:</label>
         <div class="progress-container">
             <progress id="file-progress" value={{ file_progress }} max="100"></progress>
-            <span class="progress-text">{{ file_progress }}%
+            <span id="file-progress-label" class="progress-text">{{ file_progress }}%
         </div>
-        <label for="progress">Overall Job Progress:</label>
+        <label for="job-progress">Overall Job Progress:</label>
         <div class="progress-container">
-            <progress id="progress" value={{ job_progress }} max="100"></progress>
-            <span class="progress-text">{{ job_progress }}%
+            <progress id="job-progress" value={{ job_progress }} max="100"></progress>
+            <span id="job-progress-label" class="progress-text">{{ job_progress }}%
         </div>
+        {% endif %}
         {% endif %}
         {% else %}
         <form method="post" action="{{ url_for('load_directories') }}">
@@ -48,7 +54,7 @@
             <label for="folder">Folder:</label>
             <select name="folder" id="folder">
                 {% for directory in directories %}
-                <option value="{{ directory.path }}">{{ directory.name }}</option>
+                <option value="{{ directory.path }}">{{ directory.name }} ({{directory.size}})</option>
                 {% endfor %}
             </select>
             <input type="submit" value="Load Subdirectories">
@@ -63,7 +69,7 @@
             <label for="folder">Folder:</label>
             <select name="folder" id="folder">
                 {% for subdirectory in subdirectories %}
-                <option value="{{ subdirectory.path }}">{{ subdirectory.name }}</option>
+                <option value="{{ subdirectory.path }}">{{ subdirectory.name }} ({{ subdirectory.size }})</option>
                 {% endfor %}
             </select>
             <label for="include">Include:</label>

@@ -8,6 +8,7 @@ import requests
 import re
 from pymediainfo import MediaInfo
 import logging
+from ffmpeg_progress_yield import FfmpegProgress
 
 if __name__ == '__main__':
     if len(sys.argv) < 3:
@@ -37,6 +38,18 @@ if __name__ == '__main__':
     Date = datetime.now().strftime("%d-%m-%y_%H-%M-%S")
     Logfile = f"{Logfilepath}/transcode_{Date}.log"
     logging.basicConfig(format='%(levelname)s | %(asctime)s: %(message)s', datefmt='%d/%m/%Y %I:%M:%S %p', filename=Logfile, encoding='utf-8', level=logging.DEBUG)
+
+    def store_job(item, job_data):
+        logging.debug(f"Storing {item}: {job_data} in /config/job.yaml")
+        filename = "/config/job.yaml"
+        try:
+            with open(filename, 'r') as f:
+                data = yaml.safe_load(f)
+            data[item] = f"{job_data}"
+            with open(filename, 'w') as f:
+                yaml.dump(data, f, default_flow_style=False)
+        except FileNotFoundError:
+            return
 
     # Function for sending Telegram Message
     def send_telegram_message(message):
@@ -112,6 +125,7 @@ if __name__ == '__main__':
     logging.info("Done.")
     logging.info("Fetching file list...")
     file_list = get_files(mediafolder, include)
+    logging.debug(f"File list is: {file_list}")
 
     logging.info("Done.")
     logging.info("Creating convert job function...")
@@ -134,16 +148,17 @@ if __name__ == '__main__':
         params = f"repeat-headers=1:profile=main10:level=5.1"
 
         total_files = len(file_list)
+        store_job("total_files", total_files)
         progress_percentage = 0
-        update_progress_yaml("job_progress", 0)
-        update_progress_yaml("file_progress", 0)
         for i, file_path in enumerate(file_list):
+            store_job("current_file_number", i+1)
             logging.info(" ")
             jobfailed = ""
             jobsuccessful = ""
             logging.info("")
             convertedname = os.path.basename(file_path)
             filetitle = convertedname
+            store_job("current_file", filetitle)
             amendedname_path = file_path + "_old"
             logging.info(f"Working on file: {convertedname}.")
             logging.debug(f"File path: {file_path}")
@@ -187,7 +202,7 @@ if __name__ == '__main__':
 
                 logging.info("Beginning transcode...")
                 starttime = datetime.now()
-                process = subprocess.Popen([
+                cmd = [
                     "/usr/lib/jellyfin-ffmpeg/ffmpeg",
                     "-c:v", "h264_qsv",
                     "-i", f"{file_path}_old",
@@ -202,30 +217,24 @@ if __name__ == '__main__':
                     "-global_quality", f"{quality}",
                     "-c:a", "copy",
                     "-preset", "fast",
-                    "-stats_period", "5",
+                    "-stats_period", "15",
                     outputfile
-                ],stdout=subprocess.PIPE, stderr=subprocess.STDOUT, universal_newlines=True)
+                ]
 
-                for line in process.stdout:
-                    # Use a regular expression to match the frame number
-                    match = re.search(r"frame= (\d+)", line)
+                process = FfmpegProgress(cmd)
+                
+                for file_progress_percentage in process.run_command_with_progress():
+                    logging.debug(f"File Progress: {file_progress_percentage}%")
+                    update_progress_yaml("file_progress", file_progress_percentage)
 
-                    if match:
-                        frame_number = int(match.group(1))
-                        logging.debug(f"Working on Frame {frame_number} of {fileframecount}")
-
-                        file_progress_percentage = int((frame_number) / fileframecount * 100)
-                        logging.debug(f"File Progress: {file_progress_percentage}%")
-                        update_progress_yaml("file_progress", file_progress_percentage)
-
-                        if progress_percentage == 0:
-                            job_progress_percentage = ((progress_percentage_next_step - progress_percentage)/100) * file_progress_percentage
-                        else:
-                            job_progress_percentage = progress_percentage + (((progress_percentage_next_step - progress_percentage)/100) * file_progress_percentage)
+                    if progress_percentage == 0:
+                        job_progress_percentage = round(((progress_percentage_next_step - progress_percentage)/100) * file_progress_percentage)
+                    else:
+                        job_progress_percentage = round(progress_percentage + (((progress_percentage_next_step - progress_percentage)/100) * file_progress_percentage))
                             
-                        logging.debug(f"Job Progress: {job_progress_percentage}%")
-                        update_progress_yaml("job_progress", job_progress_percentage)
-
+                    logging.debug(f"Job Progress: {job_progress_percentage}%")
+                    update_progress_yaml("job_progress", job_progress_percentage)
+                    
                 newfilesizeinbytes = os.path.getsize(outputfile)
                 NewFolderSizeBytes += newfilesizeinbytes
                 newfilesize = round(newfilesizeinbytes / (1024*1024*1024), 2)

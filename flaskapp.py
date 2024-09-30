@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, jsonify
+from flask import Flask, render_template, request, jsonify, redirect, url_for
 import subprocess
 import os
 import yaml
@@ -50,6 +50,25 @@ def get_directories(parent_dir, directories=None):
     directories.sort(key=lambda d: d['name'])  # Sort top-level directories alphabetically
     return directories
 
+def get_directory_size(path):
+    total_size_in_bytes = 0
+    try:
+        for dirpath, dirnames, filenames in os.walk(path):
+            for filename in filenames:
+                file_path = os.path.join(dirpath, filename)
+                try:
+                    total_size_in_bytes += os.path.getsize(file_path)
+                except OSError as e:
+                    print(f"Error accessing file {file_path}: {e}")
+            for dirname in dirnames:
+                dir_path = os.path.join(dirpath, dirname)
+                print(f"Scanning directory: {dir_path}")
+    except OSError as e:
+        print(f"Error accessing directory {path}: {e}")
+    
+    total_size = round(total_size_in_bytes / (1024*1024*1024), 2)
+    return total_size
+
 # Function to get secrets
 @app.route('/get_secret/<string:secret_name>')
 def get_secret(secret_name):
@@ -70,6 +89,18 @@ def transcode_check(keyword):
         return False
     except subprocess.CalledProcessError:
         return False
+    
+def update_progress_yaml(item, progress):
+    """Updates the progress in a YAML file.
+    Args:
+        progress: The progress percentage.
+    """
+    filename = "/config/job.yaml"
+    with open(filename, 'r') as f:
+        data = yaml.safe_load(f)
+    data[item] = f"{progress}"
+    with open(filename, 'w') as f:
+        yaml.dump(data, f, default_flow_style=False)
 
 # Function to store the directory that will be transcoded to /config/job.yaml
 def store_job(job_data):
@@ -97,17 +128,35 @@ def store_job(job_data):
 # Route to render the HTML page
 @app.route('/')
 def index():
-    transcoder_status = transcode_check('ffmpeg')
+    transcoder_status = transcode_check('x265transcoder.py')
     job_directory = ''
     job_progress = ''
     file_progress = ''
+    current_file_number = ''
+    current_file = ''
+    total_files = ''
     if transcoder_status == True:
         with open('/config/job.yaml', 'r') as f:
             job_config = yaml.safe_load(f)
             job_directory = job_config.get('job_directory', '')
             job_progress = job_config.get('job_progress', '')
             file_progress = job_config.get('file_progress', '')
-    return render_template('index.html', version=version, os=os, config=config, transcoder_status=transcoder_status, job_directory=job_directory, job_progress=job_progress, file_progress=file_progress)
+            try:
+                current_file_number = job_config.get('current_file_number', '')
+            except:
+                current_file_number = "Loading..."
+                pass
+            try:
+                current_file = job_config.get('current_file', '')
+            except:
+                current_file = "Loading..."
+                pass
+            try:
+                total_files = job_config.get('total_files', '')
+            except:
+                total_files = "Loading..."
+                pass
+    return render_template('index.html', version=version, os=os, config=config, transcoder_status=transcoder_status, job_directory=job_directory, job_progress=job_progress, file_progress=file_progress, current_file_number=current_file_number, current_file=current_file, total_files=total_files)
 
 # Route to handle loading directories
 @app.route('/load_directories', methods=['POST'])
@@ -119,14 +168,17 @@ def load_directories():
         # If the selected parent directory is for films, render the final form directly
         subdirectories = sorted([{
             'name': entry,
-            'path': os.path.join(parent_dir, entry)
+            'path': os.path.join(parent_dir, entry),
+            'size': str(get_directory_size(os.path.join(parent_dir, entry))) + " GB"
         } for entry in os.listdir(parent_dir) if os.path.isdir(os.path.join(parent_dir, entry))], key=lambda x: x['name'].lower())
         html = render_template('index.html', subdirectories=subdirectories, version=version, os=os, current_dir=parent_dir, parent_dir=parent_dir, config=config, films='films')
     else:
         # If the selected parent directory is for shows, render the folder selection form
-        directories = sorted([{'name': entry, 'path': os.path.join(parent_dir, entry)}
-                            for entry in os.listdir(parent_dir)
-                            if os.path.isdir(os.path.join(parent_dir, entry))], key=lambda x: x['name'].lower())
+        directories = sorted([{
+            'name': entry,
+            'path': os.path.join(parent_dir, entry),
+            'size': str(get_directory_size(os.path.join(parent_dir, entry))) + " GB"
+        } for entry in os.listdir(parent_dir) if os.path.isdir(os.path.join(parent_dir, entry))], key=lambda x: x['name'].lower())
         html = render_template('index.html', directories=directories, version=version, os=os, config=config)
     return html
 
@@ -137,12 +189,12 @@ def load_subdirectories():
     current_dir = request.form.get('folder')
 
     if current_dir:
-        subdirectories = sorted([{'name': entry, 'path': os.path.join(current_dir, entry)}
+        subdirectories = sorted([{'name': entry, 'path': os.path.join(current_dir, entry), 'size': str(get_directory_size(os.path.join(current_dir, entry))) + " GB"}
                                  for entry in os.listdir(current_dir)
                                  if os.path.isdir(os.path.join(current_dir, entry))], key=lambda x: x['name'].lower())
         html = render_template('index.html', subdirectories=subdirectories, version=version, os=os, current_dir=current_dir, parent_dir=parent_dir, config=config, shows='shows')
     else:
-        directories = sorted([{'name': entry, 'path': os.path.join(parent_dir, entry)}
+        directories = sorted([{'name': entry, 'path': os.path.join(parent_dir, entry), 'size': str(get_directory_size(os.path.join(parent_dir, entry))) + " GB"}
                               for entry in os.listdir(parent_dir)
                               if os.path.isdir(os.path.join(parent_dir, entry))], key=lambda x: x['name'].lower())
         html = render_template('index.html', directories=directories, version=version, os=os, current_dir=parent_dir, parent_dir=parent_dir, config=config)
@@ -164,8 +216,10 @@ def run():
         # Store the job data in job.config
         store_job(folder)
         # Call the x265transcoder.py script and pass the variables
-        subprocess.run(['python', 'x265transcoder.py', folder, include, quality, delete, str(telegram_token), str(telegram_chatid), version])
-        return "Success"
-
+        subprocess.Popen(['python', 'x265transcoder.py', folder, include, quality, delete, str(telegram_token), str(telegram_chatid), version])
+        update_progress_yaml("job_progress", 0)
+        update_progress_yaml("file_progress", 0)
+        return redirect(url_for('index'))
+    
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0')
