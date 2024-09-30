@@ -54,7 +54,7 @@
             <label for="folder">Folder:</label>
             <select name="folder" id="folder">
                 {% for directory in directories %}
-                <option value="{{ directory.path }}">{{ directory.name }}</option>
+                <option value="{{ directory.path }}">{{ directory.name }} ({{directory.size}})</option>
                 {% endfor %}
             </select>
             <input type="submit" value="Load Subdirectories">
@@ -69,7 +69,7 @@
             <label for="folder">Folder:</label>
             <select name="folder" id="folder">
                 {% for subdirectory in subdirectories %}
-                <option value="{{ subdirectory.path }}">{{ subdirectory.name }}</option>
+                <option value="{{ subdirectory.path }}">{{ subdirectory.name }} ({{ subdirectory.size }})</option>
                 {% endfor %}
             </select>
             <label for="include">Include:</label>
