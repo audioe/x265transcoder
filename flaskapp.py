@@ -9,13 +9,6 @@ app = Flask(__name__)
 with open('version.txt', 'r') as f:
     version = f.read().strip()
 
-# Load the configuration file
-if os.path.exists('/config/config.yaml'):
-    with open('/config/config.yaml', 'r') as f:
-        config = yaml.safe_load(f)
-else:
-    config_present = "False"
-
 # Load the /config/job.yaml file
 job_directory = ''
 job_progress = ''
@@ -125,9 +118,16 @@ def store_job(job_data):
 #        # Append the job data to the file
 #        f.write(job_data)
 
+
 # Route to render the HTML page
 @app.route('/')
 def index():
+    # Load the configuration file
+    if os.path.exists('/config/config.yaml'):
+        with open('/config/config.yaml', 'r') as f:
+            config = yaml.safe_load(f)
+    else:
+        return redirect(url_for('setup'))
     transcoder_status = transcode_check('x265transcoder.py')
     job_directory = ''
     job_progress = ''
@@ -158,9 +158,60 @@ def index():
                 pass
     return render_template('index.html', version=version, os=os, config=config, transcoder_status=transcoder_status, job_directory=job_directory, job_progress=job_progress, file_progress=file_progress, current_file_number=current_file_number, current_file=current_file, total_files=total_files)
 
+@app.route('/setup', methods=['GET', 'POST'])
+def setup():
+    if request.method == 'POST':
+        use_telegram = 'use_telegram' in request.form
+        telegram_chat_id = request.form.get('telegram_chat_id', '')
+        telegram_token = request.form.get('telegram_token', '')
+        shows_directory = request.form.get('shows_directory', '')
+        films_directory = request.form.get('films_directory', '')
+
+        config = {
+            'secrets': {
+                'TELEGRAM_TOKEN': telegram_token if use_telegram else '',
+                'TELEGRAM_CHATID': telegram_chat_id if use_telegram else ''
+            },
+            'libraries': {
+                'shows': shows_directory,
+                'films': films_directory
+            }
+        }
+
+        with open('/config/config.yaml', 'w') as f:
+            yaml.dump(config, f)
+
+        return redirect(url_for('index'))
+
+    # Load existing config if it exists
+    config = {}
+    if os.path.exists('/config/config.yaml'):
+        with open('/config/config.yaml', 'r') as f:
+            config = yaml.safe_load(f)
+
+    # Set default values, using existing config if available
+    default_shows = config.get('libraries', {}).get('shows', '/shows')
+    default_films = config.get('libraries', {}).get('films', '/films')
+    use_telegram = bool(config.get('secrets', {}).get('TELEGRAM_TOKEN'))
+    telegram_chat_id = config.get('secrets', {}).get('TELEGRAM_CHATID', '')
+    telegram_token = config.get('secrets', {}).get('TELEGRAM_TOKEN', '')
+
+    return render_template('setup.html', 
+                           default_shows=default_shows, 
+                           default_films=default_films,
+                           use_telegram=use_telegram,
+                           telegram_chat_id=telegram_chat_id,
+                           telegram_token=telegram_token)
+
 # Route to handle loading directories
 @app.route('/load_directories', methods=['POST'])
 def load_directories():
+    # Load the configuration file
+    if os.path.exists('/config/config.yaml'):
+        with open('/config/config.yaml', 'r') as f:
+            config = yaml.safe_load(f)
+    else:
+        return redirect(url_for('setup'))
     parent_dir = request.form.get('parent_dir', '/shows')
     is_films = parent_dir == config['libraries']['films']
 

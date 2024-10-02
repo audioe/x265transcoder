@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Setup Configuration</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+</head>
+<body>
+    <div class="container">
+    <h1>Setup Configuration</h1>
+    <form method="POST">
+        <p>Enable Telegram Notifications:</p>
+        <label class="switch">
+            <input type="checkbox" id="use_telegram" name="use_telegram">
+            <span class="slider round">
+        </label>
+
+        <div id="telegram_details" style="display: {% if use_telegram %}block{% else %}none{% endif %};">
+            <label for="telegram_chat_id">Enter Telegram Chat ID:</label>
+            <input type="text" id="telegram_chat_id" name="telegram_chat_id" value="{{ telegram_chat_id }}"><br>
+    
+            <label for="telegram_token">Enter Telegram Token:</label>
+            <input type="text" id="telegram_token" name="telegram_token" value="{{ telegram_token }}"><br>
+        </div>
+    
+        <h2>Library Directories</h2>
+        <label for="shows_directory">Shows Directory:</label>
+        <input type="text" id="shows_directory" name="shows_directory" value="{{ default_shows }}" required><br>
+    
+        <label for="films_directory">Films Directory:</label>
+        <input type="text" id="films_directory" name="films_directory" value="{{ default_films }}" required><br>
+        <input type="submit" value="Save Configuration">
+    </form>
+    </div>
+
+    <script>
+        document.getElementById('use_telegram').addEventListener('change', function() {
+            var details = document.getElementById("telegram_details");
+            details.style.display = this.checked ? "block" : "none";
+        });
+    </script>
+</body>
+</html>
