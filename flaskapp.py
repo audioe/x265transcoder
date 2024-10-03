@@ -20,6 +20,15 @@ if os.path.exists('/config/job.yaml'):
         job_progress = job_config.get('job_progress', '')
         file_progress = job_config.get('file_progress', '')
 
+def load_config():
+    global config
+    # Load the configuration file
+    if os.path.exists('/config/config.yaml'):
+        with open('/config/config.yaml', 'r') as f:
+            config = yaml.safe_load(f)
+    else:
+        return redirect(url_for('setup'))
+
 # Function to get list of directories
 def get_directories(parent_dir, directories=None):
     if directories is None:
@@ -122,12 +131,7 @@ def store_job(job_data):
 # Route to render the HTML page
 @app.route('/')
 def index():
-    # Load the configuration file
-    if os.path.exists('/config/config.yaml'):
-        with open('/config/config.yaml', 'r') as f:
-            config = yaml.safe_load(f)
-    else:
-        return redirect(url_for('setup'))
+    load_config()
     transcoder_status = transcode_check('x265transcoder.py')
     job_directory = ''
     job_progress = ''
@@ -206,12 +210,7 @@ def setup():
 # Route to handle loading directories
 @app.route('/load_directories', methods=['POST'])
 def load_directories():
-    # Load the configuration file
-    if os.path.exists('/config/config.yaml'):
-        with open('/config/config.yaml', 'r') as f:
-            config = yaml.safe_load(f)
-    else:
-        return redirect(url_for('setup'))
+    load_config()
     parent_dir = request.form.get('parent_dir', '/shows')
     is_films = parent_dir == config['libraries']['films']
 
@@ -236,6 +235,7 @@ def load_directories():
 # Route to handle loading subdirectories (for TV shows)
 @app.route('/load_subdirectories', methods=['POST'])
 def load_subdirectories():
+    load_config()
     parent_dir = request.form.get('parent_dir')
     current_dir = request.form.get('folder')
 
@@ -255,6 +255,7 @@ def load_subdirectories():
 # Route to handle running the Transcoder
 @app.route("/run", methods=["POST"])
 def run():
+    load_config()
     if request.method == 'POST':
         folder = str(request.form['folder'])
         include = request.form['include']
