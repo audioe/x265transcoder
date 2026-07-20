@@ -1,0 +1,155 @@
+# Issue Log
+
+Issues are categorised as **Bug**, **Limitation**, or **Improvement**. Items without a resolution are open.
+
+---
+
+## Open Issues
+
+### ISS-001 — Race condition on /config/job.yaml writes
+**Type:** Bug  
+**Severity:** Medium  
+**Files:** `flaskapp.py`, `x265transcoder.py`
+
+Both the Flask process and the transcoder process read and write `/config/job.yaml` without any file locking. A write from one process can partially overwrite or corrupt a concurrent write from the other, particularly at job submission time when Flask resets progress fields while the transcoder is also initialising.
+
+**Impact:** Corrupted YAML could cause the progress UI to crash on parse, or cause the transcoder to lose its job metadata.
+
+**Suggested fix:** Use `fcntl.flock()` (Linux) or a lock file alongside the YAML, or replace the shared-file IPC with a lightweight SQLite database or Redis instance.
+
+---
+
+### ISS-002 — `GET /get_secret/<name>` is unauthenticated
+**Type:** Bug / Security  
+**Severity:** High (if network-exposed)  
+**Files:** `flaskapp.py`
+
+The `/get_secret/<name>` route returns config secrets (including the Telegram bot token) in plain text with no authentication or authorisation check.
+
+**Impact:** Any client that can reach port 5000 can retrieve all configured secrets.
+
+**Suggested fix:** Remove the public endpoint and read secrets directly from the `config` dict where needed (already done in `run()`). The route appears to be a development artefact.
+
+---
+
+### ISS-003 — Single active job enforcement uses `ps aux`
+**Type:** Limitation  
+**Severity:** Low  
+**Files:** `flaskapp.py → transcode_check()`
+
+Job detection is implemented by scanning `ps aux` output for the string `x265transcoder.py`. This is fragile: it can match unrelated processes, and `ps` is not available on all container base images.
+
+**Impact:** Multiple jobs could be submitted concurrently, or a false positive could block job submission.
+
+**Suggested fix:** Write a PID file when the transcoder starts and check/clean it on startup; or use a proper process manager.
+
+---
+
+### ISS-004 — `modules/collector.py` is not integrated into the UI
+**Type:** Improvement  
+**Severity:** Low  
+**Files:** `modules/collector.py`, `flaskapp.py`
+
+The `collector.py` module scans the media library and writes a codec inventory to `/config/db.yaml`, but there are no Flask routes that call it or expose the data.
+
+**Impact:** The inventory database is never populated in normal usage. The feature is effectively dormant.
+
+**Suggested fix:** Add a background scan on startup (or a manual trigger route) and expose the inventory data on the home page to give users a view of what remains to be transcoded.
+
+---
+
+### ISS-005 — Directory size calculation blocks the request thread
+**Type:** Limitation  
+**Severity:** Medium  
+**Files:** `flaskapp.py → get_directory_size()`
+
+`get_directory_size()` performs a full recursive `os.walk` on every listed directory synchronously in the Flask request handler. For large libraries this can take tens of seconds, blocking the entire Flask dev server (single-threaded by default).
+
+**Impact:** The UI becomes unresponsive while directory sizes are being calculated.
+
+**Suggested fix:** Run size calculations in a background thread or process and return cached values. Alternatively, use `du -sb` via subprocess which can be faster for large trees. Consider running Flask under Gunicorn with multiple workers for the production container.
+
+---
+
+### ISS-006 — Flask development server used in production
+**Type:** Limitation  
+**Severity:** Medium  
+**Files:** `flaskapp.py`, `dockerfile`
+
+The container CMD runs Flask with `app.run(debug=True, host='0.0.0.0')`. The Flask development server is single-threaded, not designed for concurrent requests, and has `debug=True` which enables the interactive debugger and auto-reloader — both inappropriate for production.
+
+**Suggested fix:** Switch to Gunicorn: `gunicorn -w 2 -b 0.0.0.0:5000 flaskapp:app`. Disable debug mode or gate it behind an environment variable.
+
+---
+
+### ISS-007 — No validation on POST form inputs
+**Type:** Bug / Security  
+**Severity:** Medium  
+**Files:** `flaskapp.py → run()`
+
+The `folder`, `include`, `quality`, and `delete` values from the transcode submission form are passed directly as CLI arguments to `subprocess.Popen` without sanitisation. A user could potentially pass path traversal sequences or shell metacharacters via the `folder` or `include` fields.
+
+**Impact:** Limited by the fact that `subprocess.Popen` with a list argument does not invoke a shell, so shell injection is mitigated. However, path traversal via `folder` could cause the transcoder to operate on unintended directories.
+
+**Suggested fix:** Validate that `folder` is a subdirectory of the configured library paths; validate `quality` is an integer in the 18–25 range; restrict `include` to known file extensions.
+
+---
+
+### ISS-008 — FFmpeg binary path is hardcoded
+**Type:** Limitation  
+**Files:** `x265transcoder.py`
+
+The FFmpeg binary path `/usr/lib/jellyfin-ffmpeg/ffmpeg` is hardcoded in the transcode command. If the Jellyfin FFmpeg package changes its install path or the container base changes, the transcoder will silently fail.
+
+**Suggested fix:** Make the FFmpeg path configurable via `config.yaml` or an environment variable with the current path as the default.
+
+---
+
+### ISS-009 — `store_job()` in `flaskapp.py` has a bug in its FileNotFoundError handler
+**Type:** Bug  
+**Severity:** Low  
+**Files:** `flaskapp.py → store_job()`
+
+In the `except FileNotFoundError` branch, the code assigns `data` twice in succession, with the second assignment (`data = {'progress': "0"}`) overwriting the first (`data = {'job_directory': job_data}`). As a result, if `job.yaml` does not exist, the created file will only contain `progress: "0"` and the `job_directory` will be lost.
+
+```python
+# Bug — second assignment clobbers first
+data = {'job_directory': job_data}
+data = {'progress': "0"}
+```
+
+**Suggested fix:**
+```python
+data = {'job_directory': job_data, 'progress': "0"}
+```
+
+---
+
+### ISS-010 — Progress meta-refresh is not used for films jobs
+**Type:** Bug  
+**Severity:** Low  
+**Files:** `templates/index.html`
+
+The auto-refresh `<meta>` tag is rendered when `transcoder_status == True`, but the "in progress" display branches on whether `"films"` appears in `job` (the `job_directory` value). The films branch does not display progress bars — it only shows the directory name. The progress bars are only shown in the shows branch, and only when `current_file` does not contain `"Loading"`. This may be intentional, but is undocumented.
+
+---
+
+## Resolved Issues
+
+No resolved issues recorded yet.
+
+---
+
+## Improvement Backlog
+
+| ID | Description | Priority |
+|----|-------------|----------|
+| IMP-001 | Add Gunicorn to the container (ISS-006) | High |
+| IMP-002 | Fix `store_job` FileNotFoundError handler (ISS-009) | High |
+| IMP-003 | Remove or secure `/get_secret` endpoint (ISS-002) | High |
+| IMP-004 | Add file locking to job.yaml writes (ISS-001) | Medium |
+| IMP-005 | Wire `collector.py` into the UI as a library overview page | Medium |
+| IMP-006 | Async directory size calculation (ISS-005) | Medium |
+| IMP-007 | Make FFmpeg path configurable (ISS-008) | Low |
+| IMP-008 | Add input validation on transcode form (ISS-007) | Medium |
+| IMP-009 | Replace `ps aux` job detection with PID file (ISS-003) | Low |
