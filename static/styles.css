@@ -151,7 +151,8 @@ body {
 
 .container {
     position: relative;
-    max-width: 650px;
+    max-width: 800px;
+    width: 90%;
     margin: 0 auto;
     padding: 40px;
     background-color: var(--bg-card);
@@ -161,7 +162,7 @@ body {
 }
 
 .recommendations-container {
-    max-width: 960px;
+    max-width: 1100px;
 }
 
 h1 {
@@ -541,7 +542,6 @@ progress::-moz-progress-bar {
     font-size: 0.9em;
     font-weight: 600;
     color: var(--text-primary);
-    white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
 }
@@ -678,13 +678,6 @@ progress::-moz-progress-bar {
 .progress-eta strong {
     color: var(--accent-orange);
     font-size: 1.1em;
-}
-
-/* Responsive meta grid */
-@media (max-width: 600px) {
-    .progress-meta {
-        grid-template-columns: repeat(2, 1fr);
-    }
 }
 
 /* --- Transcode Section --- */
@@ -987,6 +980,7 @@ progress::-moz-progress-bar {
     padding: 12px 16px;
     text-align: left;
     border-bottom: 1px solid var(--border-subtle);
+    word-break: break-word;
 }
 
 .recommendations-table th {
@@ -1391,6 +1385,18 @@ progress::-moz-progress-bar {
 
 /* --- Responsive --- */
 
+/* Large desktop */
+@media (min-width: 1400px) {
+    .container {
+        max-width: 900px;
+    }
+
+    .recommendations-container {
+        max-width: 1200px;
+    }
+}
+
+/* Tablet */
 @media (max-width: 768px) {
     .main-nav {
         padding: 0 16px;
@@ -1402,7 +1408,7 @@ progress::-moz-progress-bar {
     .nav-version { display: none; }
 
     .container {
-        margin: 16px;
+        width: 95%;
         padding: 24px;
         border-radius: var(--radius-md);
     }
@@ -1420,9 +1426,46 @@ progress::-moz-progress-bar {
         flex-direction: column;
         align-items: flex-start;
     }
+
+    .progress-meta {
+        grid-template-columns: repeat(2, 1fr);
+    }
+
+    .recommendations-table th,
+    .recommendations-table td {
+        padding: 10px 10px;
+        font-size: 0.82em;
+    }
 }
 
+/* Mobile */
 @media (max-width: 480px) {
+    body {
+        font-size: 16px;
+    }
+
+    .main-nav {
+        padding: 0 12px;
+        height: 48px;
+    }
+
+    .nav-brand { font-size: 0.95em; margin-right: 10px; }
+    .nav-link { padding: 6px 10px; font-size: 0.78em; }
+    .nav-link-secondary { margin-left: 8px; }
+
+    .container {
+        width: 100%;
+        margin: 0;
+        padding: 20px 16px;
+        border-radius: 0;
+        border-left: none;
+        border-right: none;
+    }
+
+    .page-content {
+        margin-top: 16px;
+    }
+
     .dashboard-cards,
     .stats-grid {
         grid-template-columns: 1fr;
@@ -1431,5 +1474,79 @@ progress::-moz-progress-bar {
     .library-type-options {
         flex-direction: column;
         gap: 10px;
+    }
+
+    .progress-meta {
+        grid-template-columns: 1fr 1fr;
+        gap: 8px;
+    }
+
+    .progress-meta-item {
+        padding: 10px 12px;
+    }
+
+    .meta-value {
+        font-size: 0.85em;
+    }
+
+    .progress-bar-track {
+        height: 32px;
+        border-radius: 16px;
+    }
+
+    .progress-bar-fill {
+        border-radius: 16px;
+    }
+
+    .animated-stripes::after {
+        border-radius: 16px;
+    }
+
+    .progress-current-file {
+        padding: 12px 14px;
+    }
+
+    .current-file-name {
+        font-size: 0.85em;
+        word-break: break-word;
+    }
+
+    /* Tables: allow horizontal scroll but increase touch area */
+    .recommendations-table th,
+    .recommendations-table td {
+        padding: 12px 10px;
+        font-size: 0.82em;
+    }
+
+    .btn-transcode, .btn-detail, .btn-scan {
+        padding: 10px 16px;
+        font-size: 0.85em;
+    }
+
+    input[type="submit"] {
+        padding: 14px 24px;
+        font-size: 16px;
+    }
+
+    select, input[type="text"] {
+        padding: 14px 16px;
+        font-size: 16px;
+    }
+
+    .stat-card {
+        padding: 14px;
+    }
+
+    .stat-value {
+        font-size: 1.3em;
+    }
+
+    .switch {
+        width: 56px;
+        height: 30px;
+    }
+
+    h3 {
+        font-size: 1.1em;
     }
 }
