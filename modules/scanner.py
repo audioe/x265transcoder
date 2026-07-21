@@ -435,12 +435,30 @@ def get_recommendations(limit=50):
     """, (limit,)).fetchall()
 
     # Top x264 show seasons by total season size
+    # Include a sample filepath so we can derive the directory path
+    # Also get total episode count for the season (including x265) for context
     shows = conn.execute("""
-        SELECT title, season, COUNT(*) as episode_count, SUM(size_bytes) as total_bytes
-        FROM media_files
-        WHERE category = 'shows' AND codec = 'x264'
-        GROUP BY title, season
-        ORDER BY total_bytes DESC
+        SELECT
+            s.title,
+            s.season,
+            s.episode_count as x264_episodes,
+            s.total_bytes,
+            s.sample_filepath,
+            COALESCE(t.total_episodes, s.episode_count) as total_episodes
+        FROM (
+            SELECT title, season, COUNT(*) as episode_count, SUM(size_bytes) as total_bytes,
+                   MIN(filepath) as sample_filepath
+            FROM media_files
+            WHERE category = 'shows' AND codec = 'x264'
+            GROUP BY title, season
+        ) s
+        LEFT JOIN (
+            SELECT title, season, COUNT(*) as total_episodes
+            FROM media_files
+            WHERE category = 'shows'
+            GROUP BY title, season
+        ) t ON s.title = t.title AND s.season IS t.season
+        ORDER BY s.total_bytes DESC
         LIMIT ?
     """, (limit,)).fetchall()
 
@@ -475,8 +493,26 @@ def get_recommendations(limit=50):
 
     conn.close()
 
+    # Build results with directory paths for the "Transcode Now" button
+    films_list = []
+    for r in films:
+        film = dict(r)
+        # Directory is the parent of the file
+        film["directory"] = os.path.dirname(film["filepath"])
+        films_list.append(film)
+
+    shows_list = []
+    for r in shows:
+        show = dict(r)
+        # Directory is the parent of the sample file (i.e. the season folder)
+        if show.get("sample_filepath"):
+            show["directory"] = os.path.dirname(show["sample_filepath"])
+        else:
+            show["directory"] = ""
+        shows_list.append(show)
+
     return {
-        "films": [dict(r) for r in films],
-        "shows": [dict(r) for r in shows],
+        "films": films_list,
+        "shows": shows_list,
         "stats": stats,
     }

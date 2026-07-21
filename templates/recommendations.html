@@ -127,6 +127,7 @@
                         <th class="sortable" data-sort="text" onclick="sortTable('films-table', 0)">Title</th>
                         <th class="sortable" data-sort="text" onclick="sortTable('films-table', 1)">Filename</th>
                         <th class="sortable" data-sort="size" onclick="sortTable('films-table', 2)">Size</th>
+                        <th>Action</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -135,6 +136,12 @@
                         <td>{{ film.title }}</td>
                         <td>{{ film.filename }}</td>
                         <td data-bytes="{{ film.size_bytes }}">{{ "%.2f"|format(film.size_bytes / (1024**3)) }} GB</td>
+                        <td>
+                            <form method="post" action="{{ url_for('run_from_recommendations') }}" class="inline-form">
+                                <input type="hidden" name="folder" value="{{ film.directory }}">
+                                <input type="submit" value="Transcode" class="btn-transcode" {% if transcoder_running %}disabled{% endif %}>
+                            </form>
+                        </td>
                     </tr>
                     {% endfor %}
                 </tbody>
@@ -153,7 +160,9 @@
                         <th class="sortable" data-sort="text" onclick="sortTable('shows-table', 0)">Show</th>
                         <th class="sortable" data-sort="text" onclick="sortTable('shows-table', 1)">Season</th>
                         <th class="sortable" data-sort="num" onclick="sortTable('shows-table', 2)">Episodes</th>
-                        <th class="sortable" data-sort="size" onclick="sortTable('shows-table', 3)">Total Size</th>
+                        <th>x264</th>
+                        <th class="sortable" data-sort="size" onclick="sortTable('shows-table', 4)">Total Size</th>
+                        <th>Action</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -161,8 +170,21 @@
                     <tr>
                         <td>{{ show.title }}</td>
                         <td>{{ show.season or "—" }}</td>
-                        <td>{{ show.episode_count }}</td>
+                        <td>{{ show.total_episodes }}</td>
+                        <td>
+                            {% if show.x264_episodes == show.total_episodes %}
+                                <span class="badge-all-x264">All x264</span>
+                            {% else %}
+                                <span class="badge-partial-x264">{{ show.x264_episodes }} of {{ show.total_episodes }}</span>
+                            {% endif %}
+                        </td>
                         <td data-bytes="{{ show.total_bytes }}">{{ "%.2f"|format(show.total_bytes / (1024**3)) }} GB</td>
+                        <td>
+                            <form method="post" action="{{ url_for('run_from_recommendations') }}" class="inline-form">
+                                <input type="hidden" name="folder" value="{{ show.directory }}">
+                                <input type="submit" value="Transcode" class="btn-transcode" {% if transcoder_running %}disabled{% endif %}>
+                            </form>
+                        </td>
                     </tr>
                     {% endfor %}
                 </tbody>

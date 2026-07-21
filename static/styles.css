@@ -429,3 +429,55 @@ progress::-moz-progress-bar {
     background-color: #cce5ff;
     color: #004085;
 }
+
+/* --- Transcode Now Button --- */
+
+.inline-form {
+    display: inline;
+    margin: 0;
+    padding: 0;
+}
+
+.btn-transcode {
+    background-color: #4CAF50;
+    color: white;
+    padding: 5px 12px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.85em;
+    font-weight: bold;
+    margin: 0;
+}
+
+.btn-transcode:hover {
+    background-color: #45a049;
+}
+
+.btn-transcode:disabled {
+    background-color: #ccc;
+    cursor: not-allowed;
+    color: #666;
+}
+
+/* --- x264 Status Badges --- */
+
+.badge-all-x264 {
+    display: inline-block;
+    padding: 3px 8px;
+    border-radius: 12px;
+    font-size: 0.8em;
+    font-weight: bold;
+    background-color: #fff3cd;
+    color: #856404;
+}
+
+.badge-partial-x264 {
+    display: inline-block;
+    padding: 3px 8px;
+    border-radius: 12px;
+    font-size: 0.8em;
+    font-weight: bold;
+    background-color: #e2e3e5;
+    color: #383d41;
+}

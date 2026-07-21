@@ -280,6 +280,35 @@ def run():
         update_progress_yaml("job_progress", 0)
         update_progress_yaml("file_progress", 0)
         return redirect(url_for('index'))
+
+
+# Route to run a transcode job directly from the recommendations page
+@app.route("/run_from_recommendations", methods=["POST"])
+def run_from_recommendations():
+    load_config()
+    # Check if a job is already running
+    if transcode_check('x265transcoder.py'):
+        return redirect(url_for('recommendations'))
+
+    folder = str(request.form['folder'])
+    include = request.form.get('include', '.mkv')
+    quality = request.form.get('quality', '23')
+    delete = request.form.get('delete', 'Yes')
+
+    # Get Telegram secrets
+    telegram_token = get_secret("TELEGRAM_TOKEN")
+    telegram_chatid = get_secret("TELEGRAM_CHATID")
+
+    # Store the job data
+    store_job(folder)
+
+    # Launch the transcoder
+    subprocess.Popen(['python', 'x265transcoder.py', folder, include, quality, delete,
+                      str(telegram_token), str(telegram_chatid), version])
+    update_progress_yaml("job_progress", 0)
+    update_progress_yaml("file_progress", 0)
+
+    return redirect(url_for('index'))
     
 # --- Scheduled Scanner ---
 
@@ -309,8 +338,10 @@ def recommendations():
     data = get_recommendations(limit=50)
     scan_status = get_scan_status()
     history = get_scan_history(limit=10)
+    transcoder_running = transcode_check('x265transcoder.py')
     return render_template('recommendations.html', version=version, config=config,
-                           data=data, scan_status=scan_status, scan_history=history)
+                           data=data, scan_status=scan_status, scan_history=history,
+                           transcoder_running=transcoder_running)
 
 
 @app.route('/scan_now', methods=['POST'])

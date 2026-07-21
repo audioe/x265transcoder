@@ -243,7 +243,20 @@ Note: this endpoint is unauthenticated and should not be exposed on a public net
 
 ---
 
-## 12. Scan Status Polling (GET /scan_status)
+## 12. Transcode from Recommendations (POST /run_from_recommendations)
+
+**File:** `flaskapp.py → run_from_recommendations()`
+
+1. Checks if a transcode job is already running via `transcode_check()`. If so, redirects back to `/recommendations`.
+2. Reads the `folder` from the POST body (set by the hidden input in each recommendation row's form).
+3. Uses default transcode settings: include `.mkv`, quality `23`, delete `Yes`.
+4. Fetches Telegram credentials from config.
+5. Calls `store_job(folder)` and spawns `x265transcoder.py` as a background process.
+6. Redirects to `GET /` where the progress UI is displayed.
+
+---
+
+## 13. Scan Status Polling (GET /scan_status)
 
 **File:** `flaskapp.py → scan_status_endpoint()`
 
