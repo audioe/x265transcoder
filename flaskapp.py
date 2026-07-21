@@ -2,8 +2,15 @@ from flask import Flask, render_template, request, jsonify, redirect, url_for
 import subprocess
 import os
 import yaml
+import logging
+from apscheduler.schedulers.background import BackgroundScheduler
+from modules.scanner import run_scan, get_recommendations
 
 app = Flask(__name__)
+
+# Configure logging for the scanner scheduler
+logging.basicConfig(level=logging.INFO)
+scheduler_logger = logging.getLogger("scanner_scheduler")
 
 # Read the version number from the file
 with open('version.txt', 'r') as f:
@@ -273,5 +280,46 @@ def run():
         update_progress_yaml("file_progress", 0)
         return redirect(url_for('index'))
     
+# --- Scheduled Scanner ---
+
+def scheduled_scan_job():
+    """Run the media scanner as a scheduled job."""
+    scheduler_logger.info("Scheduled scan starting...")
+    try:
+        load_config()
+        libraries = config.get('libraries', {})
+        run_scan(libraries)
+        scheduler_logger.info("Scheduled scan complete.")
+    except Exception as e:
+        scheduler_logger.error(f"Scheduled scan failed: {e}")
+
+
+# Initialise the background scheduler (runs daily at 04:00)
+scheduler = BackgroundScheduler(daemon=True)
+scheduler.add_job(scheduled_scan_job, 'cron', hour=4, minute=0, id='nightly_scan')
+scheduler.start()
+
+
+# --- Recommendations & Scan Routes ---
+
+@app.route('/recommendations')
+def recommendations():
+    load_config()
+    data = get_recommendations(limit=50)
+    return render_template('recommendations.html', version=version, config=config, data=data)
+
+
+@app.route('/scan_now', methods=['POST'])
+def scan_now():
+    """Trigger an immediate media library scan."""
+    load_config()
+    libraries = config.get('libraries', {})
+    try:
+        result = run_scan(libraries)
+        return redirect(url_for('recommendations'))
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
 if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0')
+    app.run(debug=True, host='0.0.0.0', use_reloader=False)
