@@ -101,7 +101,7 @@ docker build -t x265transcoder:local .
 
 The Dockerfile:
 
-1. Starts from `python:3.9`.
+1. Starts from `python:3.14-bookworm` (Bookworm base ensures compatibility with Jellyfin apt repo and Intel media drivers).
 2. Installs system dependencies including `libmediainfo0v5`.
 3. Installs Python dependencies from `requirements.txt` plus `ffmpeg-progress-yield`.
 4. Adds the Jellyfin apt repository and installs `jellyfin-ffmpeg6`.

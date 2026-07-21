@@ -1,5 +1,5 @@
-# Base image with Python 3
-FROM python:3.9
+# Base image with Python 3.14 on Debian Bookworm (for Jellyfin/Intel driver compatibility)
+FROM python:3.14-bookworm
 
 # Update package lists (optional, but recommended)
 RUN apt-get update

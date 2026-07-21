@@ -32,7 +32,7 @@ A Dockerised web application that batch-transcodes video libraries from H.264 (x
 
 ## Tech stack
 
-Python 3.9 · Flask · Jinja2 · pymediainfo · ffmpeg-progress-yield · jellyfin-ffmpeg (hevc_qsv) · PyYAML · APScheduler · SQLite · Docker · GitHub Actions
+Python 3.14 · Flask · Jinja2 · pymediainfo · ffmpeg-progress-yield · jellyfin-ffmpeg (hevc_qsv) · PyYAML · APScheduler · SQLite · Docker · GitHub Actions
 
 ## Documentation index
 

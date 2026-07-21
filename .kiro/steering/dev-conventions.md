@@ -6,7 +6,7 @@ inclusion: always
 
 ## Language and runtime
 
-- Python 3.9 (matches the Docker base image `python:3.9`).
+- Python 3.14 (Docker base image `python:3.14-bookworm`; Bookworm chosen for Jellyfin/Intel driver compatibility).
 - No type annotations currently used; adding them is welcome but not required.
 - Dependencies are managed in `requirements.txt`. Pin versions when adding new packages.
 - `ffmpeg-progress-yield` is installed separately in the Dockerfile (`pip3 install ffmpeg-progress-yield`) — if it is needed as an explicit dependency, add it to `requirements.txt`.
