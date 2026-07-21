@@ -15,6 +15,8 @@ Both the Flask process and the transcoder process read and write `/config/job.ya
 
 **Impact:** Corrupted YAML could cause the progress UI to crash on parse, or cause the transcoder to lose its job metadata.
 
+**Mitigation applied (2026-07-20):** The `index()` route now guards against `yaml.safe_load()` returning `None` (which happens when the file is read mid-write). The page gracefully shows "Loading..." and auto-refreshes. The underlying race condition (no file locking) remains unresolved.
+
 **Suggested fix:** Use `fcntl.flock()` (Linux) or a lock file alongside the YAML, or replace the shared-file IPC with a lightweight SQLite database or Redis instance.
 
 ---
@@ -48,13 +50,12 @@ Job detection is implemented by scanning `ps aux` output for the string `x265tra
 ### ISS-004 — `modules/collector.py` is not integrated into the UI
 **Type:** Improvement  
 **Severity:** Low  
-**Files:** `modules/collector.py`, `flaskapp.py`
+**Files:** `modules/collector.py`, `flaskapp.py`  
+**Status:** Resolved (superseded)
 
 The `collector.py` module scans the media library and writes a codec inventory to `/config/db.yaml`, but there are no Flask routes that call it or expose the data.
 
-**Impact:** The inventory database is never populated in normal usage. The feature is effectively dormant.
-
-**Suggested fix:** Add a background scan on startup (or a manual trigger route) and expose the inventory data on the home page to give users a view of what remains to be transcoded.
+**Resolution (2026-07-20):** The new `modules/scanner.py` fully supersedes `collector.py`. It performs scheduled (nightly at 04:00) and manual scans, stores results in SQLite (`/config/media.db`), and exposes library stats and recommendations via `GET /recommendations`. `collector.py` is retained for backward compatibility only and should not be extended.
 
 ---
 
@@ -160,7 +161,7 @@ When the background scan thread held a write lock on `/config/media.db`, any con
 | IMP-002 | Fix `store_job` FileNotFoundError handler (ISS-009) | High |
 | IMP-003 | Remove or secure `/get_secret` endpoint (ISS-002) | High |
 | IMP-004 | Add file locking to job.yaml writes (ISS-001) | Medium |
-| IMP-005 | Wire `collector.py` into the UI as a library overview page | Medium |
+| IMP-005 | ~~Wire `collector.py` into the UI as a library overview page~~ — resolved by `modules/scanner.py` + `/recommendations` | ~~Medium~~ Done |
 | IMP-006 | Async directory size calculation (ISS-005) | Medium |
 | IMP-007 | Make FFmpeg path configurable (ISS-008) | Low |
 | IMP-008 | Add input validation on transcode form (ISS-007) | Medium |

@@ -150,6 +150,9 @@ def index():
     if transcoder_status == True:
         with open('/config/job.yaml', 'r') as f:
             job_config = yaml.safe_load(f)
+            # Guard against empty/corrupt YAML (returns None during concurrent writes)
+            if job_config is None:
+                job_config = {}
             job_directory = job_config.get('job_directory', '')
             job_progress = job_config.get('job_progress', '')
             file_progress = job_config.get('file_progress', '')
