@@ -150,7 +150,7 @@ The Dockerfile:
 1. Starts from `python:3.14-bookworm` (Bookworm base ensures compatibility with Jellyfin apt repo and Intel media drivers).
 2. Installs system dependencies including `libmediainfo0v5`.
 3. Installs Python dependencies from `requirements.txt` plus `ffmpeg-progress-yield`.
-4. Adds the Jellyfin apt repository and installs `jellyfin-ffmpeg6`.
+4. Adds the Jellyfin apt repository and installs `jellyfin-ffmpeg7`.
 5. Installs Intel QSV runtime packages (`onevpl-tools`, `vainfo`, `intel-media-va-driver-non-free`).
 6. Copies application source into `/app`.
 7. Exposes port `5000` and starts the Flask app via `CMD ["python", "flaskapp.py"]`.
@@ -226,7 +226,7 @@ docker compose up -d
 
 - Verify `/dev/dri` is passed through to the container.
 - Run `vainfo` inside the container: `docker exec -it x265transcoder vainfo`.
-- Ensure the host Intel media driver version is compatible with the `jellyfin-ffmpeg6` build inside the container.
+- Ensure the host Intel media driver version is compatible with the `jellyfin-ffmpeg7` build inside the container.
 
 ### Progress stuck at 0%
 

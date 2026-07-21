@@ -23,7 +23,7 @@ A Dockerised web application that batch-transcodes video libraries from H.264 (x
 | `templates/history.html` | Transcode history page — lifetime stats, job list, per-job file detail drill-down |
 | `templates/setup.html` | Initial configuration setup form |
 | `ref/config.yaml` | Reference config template; live config must be at `/config/config.yaml` |
-| `dockerfile` | Container definition; installs jellyfin-ffmpeg6, Intel/AMD/NVIDIA GPU drivers |
+| `dockerfile` | Container definition; installs jellyfin-ffmpeg7, Intel/AMD/NVIDIA GPU drivers |
 
 ## Runtime paths (inside container)
 

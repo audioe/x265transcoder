@@ -36,7 +36,7 @@ RUN \
     && echo "Architectures: ${DPKG_ARCHITECTURE}" >> /etc/apt/sources.list.d/jellyfin.sources \
     && echo "Signed-By: /etc/apt/keyrings/jellyfin.gpg" >> /etc/apt/sources.list.d/jellyfin.sources \
     && apt-get update \
-    && apt-get install -y jellyfin-ffmpeg6
+    && apt-get install -y jellyfin-ffmpeg7
 
 # Install GPU dependencies (Intel QSV, AMD VAAPI, and common VA-API tools)
 RUN apt install -y \
