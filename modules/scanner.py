@@ -35,56 +35,68 @@ _scan_status = {
 
 
 def _get_connection():
-    """Get a SQLite connection, creating the schema if needed."""
-    conn = sqlite3.connect(DB_PATH)
+    """Get a SQLite connection with a busy timeout for concurrent access."""
+    conn = sqlite3.connect(DB_PATH, timeout=30)
     conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA journal_mode=WAL")  # safer for concurrent reads
-    _ensure_schema(conn)
+    conn.execute("PRAGMA journal_mode=WAL")
     return conn
 
 
-def _ensure_schema(conn):
-    """Create tables if they don't already exist."""
-    conn.executescript("""
-        CREATE TABLE IF NOT EXISTS media_files (
-            id INTEGER PRIMARY KEY,
-            category TEXT NOT NULL,
-            title TEXT NOT NULL,
-            season TEXT,
-            filepath TEXT NOT NULL UNIQUE,
-            filename TEXT NOT NULL,
-            size_bytes INTEGER NOT NULL,
-            codec TEXT NOT NULL,
-            mtime REAL NOT NULL,
-            scanned_at TEXT NOT NULL
-        );
+# --- Schema initialisation (run once at import time) ---
+_schema_initialised = False
+_schema_lock = threading.Lock()
 
-        CREATE TABLE IF NOT EXISTS scan_state (
-            id INTEGER PRIMARY KEY CHECK (id = 1),
-            last_full_scan TEXT,
-            last_incremental_scan TEXT
-        );
 
-        INSERT OR IGNORE INTO scan_state (id) VALUES (1);
+def _init_schema():
+    """Ensure the database schema exists. Called once, thread-safe."""
+    global _schema_initialised
+    if _schema_initialised:
+        return
+    with _schema_lock:
+        if _schema_initialised:
+            return
+        conn = sqlite3.connect(DB_PATH, timeout=30)
+        conn.executescript("""
+            CREATE TABLE IF NOT EXISTS media_files (
+                id INTEGER PRIMARY KEY,
+                category TEXT NOT NULL,
+                title TEXT NOT NULL,
+                season TEXT,
+                filepath TEXT NOT NULL UNIQUE,
+                filename TEXT NOT NULL,
+                size_bytes INTEGER NOT NULL,
+                codec TEXT NOT NULL,
+                mtime REAL NOT NULL,
+                scanned_at TEXT NOT NULL
+            );
 
-        CREATE TABLE IF NOT EXISTS scan_history (
-            id INTEGER PRIMARY KEY,
-            scan_type TEXT NOT NULL,
-            started_at TEXT NOT NULL,
-            completed_at TEXT,
-            duration_seconds REAL,
-            files_processed INTEGER DEFAULT 0,
-            files_added INTEGER DEFAULT 0,
-            files_removed INTEGER DEFAULT 0,
-            status TEXT DEFAULT 'running',
-            error_message TEXT
-        );
+            CREATE TABLE IF NOT EXISTS scan_state (
+                id INTEGER PRIMARY KEY CHECK (id = 1),
+                last_full_scan TEXT,
+                last_incremental_scan TEXT
+            );
 
-        CREATE INDEX IF NOT EXISTS idx_media_codec ON media_files(codec);
-        CREATE INDEX IF NOT EXISTS idx_media_category ON media_files(category);
-        CREATE INDEX IF NOT EXISTS idx_media_filepath ON media_files(filepath);
-    """)
-    conn.commit()
+            INSERT OR IGNORE INTO scan_state (id) VALUES (1);
+
+            CREATE TABLE IF NOT EXISTS scan_history (
+                id INTEGER PRIMARY KEY,
+                scan_type TEXT NOT NULL,
+                started_at TEXT NOT NULL,
+                completed_at TEXT,
+                duration_seconds REAL,
+                files_processed INTEGER DEFAULT 0,
+                files_added INTEGER DEFAULT 0,
+                files_removed INTEGER DEFAULT 0,
+                status TEXT DEFAULT 'running',
+                error_message TEXT
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_media_codec ON media_files(codec);
+            CREATE INDEX IF NOT EXISTS idx_media_category ON media_files(category);
+            CREATE INDEX IF NOT EXISTS idx_media_filepath ON media_files(filepath);
+        """)
+        conn.close()
+        _schema_initialised = True
 
 
 def _get_video_codec(file_path):
@@ -189,6 +201,7 @@ def get_scan_history(limit=10):
     """Return the most recent scan history entries."""
     if not os.path.exists(DB_PATH):
         return []
+    _init_schema()
     conn = _get_connection()
     rows = conn.execute("""
         SELECT scan_type, started_at, completed_at, duration_seconds,
@@ -210,6 +223,7 @@ def full_scan(libraries):
     """
     import time
     logger.info("Starting full media scan...")
+    _init_schema()
     start_time = time.time()
     now = datetime.now(timezone.utc).isoformat()
 
@@ -285,6 +299,7 @@ def incremental_scan(libraries):
     """
     import time
     logger.info("Starting incremental media scan...")
+    _init_schema()
     start_time = time.time()
     now = datetime.now(timezone.utc).isoformat()
 
@@ -407,6 +422,7 @@ def get_recommendations(limit=50):
     if not os.path.exists(DB_PATH):
         return {"films": [], "shows": [], "stats": {}}
 
+    _init_schema()
     conn = _get_connection()
 
     # Top x264 films by individual file size

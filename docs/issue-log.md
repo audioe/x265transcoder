@@ -136,7 +136,19 @@ The auto-refresh `<meta>` tag is rendered when `transcoder_status == True`, but 
 
 ## Resolved Issues
 
-No resolved issues recorded yet.
+### ISS-011 — SQLite "database is locked" error on concurrent access
+**Type:** Bug  
+**Severity:** High  
+**Files:** `modules/scanner.py`  
+**Resolved:** 2026-07-20
+
+When the background scan thread held a write lock on `/config/media.db`, any concurrent request to `GET /recommendations` would also attempt to run `executescript` for schema initialisation, causing an immediate `sqlite3.OperationalError: database is locked`.
+
+**Root cause:** Schema initialisation via `executescript` (which requires an exclusive lock) was called on every `_get_connection()`, and connections had no busy timeout.
+
+**Fix applied:**
+- Schema initialisation (`_init_schema()`) is now a one-shot operation protected by a threading lock — runs once per process lifetime.
+- All `sqlite3.connect()` calls now pass `timeout=30` so readers wait for the write lock to release instead of failing immediately.
 
 ---
 
