@@ -358,6 +358,12 @@ progress::-moz-progress-bar {
     color: #666;
 }
 
+.progress-eta {
+    margin-top: 15px;
+    font-size: 0.95em;
+    color: #555;
+}
+
 
 /* --- Recommendations Page --- */
 

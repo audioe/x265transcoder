@@ -22,8 +22,9 @@ This document describes the step-by-step flow of every major operation in the ap
 
 1. Calls `transcode_check('x265transcoder.py')` which runs `ps aux` and scans output for the keyword.
 2. **If a job is running:**
-   - Reads `/config/job.yaml` to get `job_directory`, `job_progress`, `file_progress`, `current_file`, `current_file_number`, `total_files`.
+   - Reads `/config/job.yaml` to get `job_directory`, `job_progress`, `file_progress`, `current_file`, `current_file_number`, `total_files`, `eta`.
    - Renders `index.html` in the "in progress" state, which injects a `<meta http-equiv="refresh" content="5">` tag to auto-reload every 5 seconds.
+   - If `eta` is non-empty, displays the estimated time remaining for the current file below the progress bars.
 3. **If no job is running:**
    - Renders `index.html` with the library-type selector form.
 
@@ -117,16 +118,19 @@ For each file in the list:
       - Pixel format: `p010le` (10-bit)
       - Metadata: `title` set to the original filename
       - Video streams: `0:v:0` mapped, encoded with `hevc_qsv`
-      - x265 params: `repeat-headers=1:profile=main10:level=5.1`
+      - Profile: `main10` (QSV-native via `-profile:v`)
       - Audio streams: `0:a` mapped, copied without re-encoding
       - Subtitle streams: `0:s?` mapped, copied
       - Rate control: `CQP` with `global_quality` set to the user-supplied value
-      - Preset: `fast`
+      - Preset: `medium`
+      - Lookahead: enabled (`-look_ahead 1 -look_ahead_depth 40`)
+      - Adaptive frame placement: enabled (`-adaptive_i 1 -adaptive_b 1`)
       - Stats period: 15 seconds
 
    f. Wraps the command in `FfmpegProgress` and iterates progress events:
       - Writes `file_progress` percentage to `/config/job.yaml`.
       - Calculates and writes `job_progress` (weighted by position in total file list).
+      - Calculates estimated time remaining (ETA) from elapsed time and file progress percentage, writes to `eta` field in `/config/job.yaml`. Clears ETA when each file completes and at job end.
 
 ### 6d. Post-Transcode Validation
 

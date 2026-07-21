@@ -149,6 +149,7 @@ def index():
     current_file_number = ''
     current_file = ''
     total_files = ''
+    eta = ''
     if transcoder_status == True:
         with open('/config/job.yaml', 'r') as f:
             job_config = yaml.safe_load(f)
@@ -158,6 +159,7 @@ def index():
             job_directory = job_config.get('job_directory', '')
             job_progress = job_config.get('job_progress', '')
             file_progress = job_config.get('file_progress', '')
+            eta = job_config.get('eta', '')
             try:
                 current_file_number = job_config.get('current_file_number', '')
             except:
@@ -192,7 +194,7 @@ def index():
                            transcoder_status=transcoder_status, job_directory=job_directory,
                            job_progress=job_progress, file_progress=file_progress,
                            current_file_number=current_file_number, current_file=current_file,
-                           total_files=total_files, dashboard_stats=dashboard_stats,
+                           total_files=total_files, eta=eta, dashboard_stats=dashboard_stats,
                            last_job_directory=last_job_directory, active_page='home')
 
 @app.route('/setup', methods=['GET', 'POST'])

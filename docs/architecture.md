@@ -169,7 +169,7 @@ Browser  GET /  (every 5 s via meta-refresh)
         ▼
 flaskapp.py reads /config/job.yaml
         └─ passes job_progress, file_progress, current_file,
-           current_file_number, total_files to template
+           current_file_number, total_files, eta to template
         ▼
 index.html renders progress bars
 ```
@@ -190,6 +190,7 @@ Key fields written by `x265transcoder.py`:
 | `current_file_number` | int | 1-based index of current file |
 | `file_progress` | int 0–100 | Progress of the current file |
 | `job_progress` | int 0–100 | Overall job progress |
+| `eta` | string | Estimated time remaining for current file (e.g. "1h 23m"), empty when idle |
 
 ---
 

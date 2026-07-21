@@ -145,8 +145,6 @@ if __name__ == '__main__':
         global quality
         global delete
         logging.info("Done.")
-        #For HW Encoding, use "-rc_mode CQP -global_quality 18" instead of crf
-        params = f"repeat-headers=1:profile=main10:level=5.1"
 
         total_files = len(file_list)
         store_job("total_files", total_files)
@@ -211,14 +209,18 @@ if __name__ == '__main__':
                     "-metadata", f"title={filetitle}",
                     "-map", "0:v:0",
                     "-c:v", "hevc_qsv",
-                    "-x265-params", f"{params}",
-                    "-map", "0:a",
+                    "-profile:v", "main10",
+                    "-preset", "medium",
                     "-rc_mode", "CQP",
                     "-global_quality", f"{quality}",
+                    "-look_ahead", "1",
+                    "-look_ahead_depth", "40",
+                    "-adaptive_i", "1",
+                    "-adaptive_b", "1",
+                    "-map", "0:a",
                     "-c:a", "copy",
                     "-map", "0:s?",
                     "-c:s", "copy",
-                    "-preset", "fast",
                     "-stats_period", "15",
                     outputfile
                 ]
@@ -237,7 +239,24 @@ if __name__ == '__main__':
                             
                     logging.debug(f"Job Progress: {job_progress_percentage}%")
                     update_progress_yaml("job_progress", job_progress_percentage)
+
+                    # Calculate estimated time remaining for current file
+                    if file_progress_percentage > 0:
+                        elapsed = (datetime.now() - starttime).total_seconds()
+                        estimated_total = elapsed / (file_progress_percentage / 100)
+                        eta_seconds = max(0, estimated_total - elapsed)
+                        eta_hours = int(eta_seconds // 3600)
+                        eta_minutes = int((eta_seconds % 3600) // 60)
+                        if eta_hours > 0:
+                            eta_display = f"{eta_hours}h {eta_minutes}m"
+                        else:
+                            eta_display = f"{eta_minutes}m"
+                        update_progress_yaml("eta", eta_display)
+                    else:
+                        update_progress_yaml("eta", "Calculating...")
                     
+                # Clear ETA after file transcode completes
+                update_progress_yaml("eta", "")
                 newfilesizeinbytes = os.path.getsize(outputfile)
                 NewFolderSizeBytes += newfilesizeinbytes
                 newfilesize = round(newfilesizeinbytes / (1024*1024*1024), 2)
@@ -331,6 +350,9 @@ if __name__ == '__main__':
         newfoldersize = round(NewFolderSizeBytes / (1024*1024*1024), 2)
         folderpercdiff = round(((NewFolderSizeBytes/OldFolderSizeBytes)-1)*100, 2)
         TotalFiles = SuccessfulCount + FailedCount + SkippedCount
+
+        # Clear ETA now that the job is complete
+        update_progress_yaml("eta", "")
 
         if FailedCount > 0:
             logging.warning(f"Some Jobs May have Failed: {Failed}")

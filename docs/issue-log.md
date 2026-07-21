@@ -96,6 +96,18 @@ The `folder`, `include`, `quality`, and `delete` values from the transcode submi
 
 ---
 
+### ISS-013 — `-x265-params` flag is ignored by `hevc_qsv` encoder
+**Type:** Bug  
+**Severity:** Low  
+**Files:** `x265transcoder.py`  
+**Status:** Resolved
+
+The FFmpeg command passes `-x265-params "repeat-headers=1:profile=main10:level=5.1"` which is a parameter for the **software** x265 encoder only. Since the project uses `hevc_qsv` (Intel Quick Sync hardware encoder), this flag is silently ignored by FFmpeg. The intended profile/level constraints are not being applied.
+
+**Resolution (2026-07-21):** Removed the dead `-x265-params` flag and its unused `params` variable. Replaced with QSV-native options: `-profile:v main10`, `-preset medium`, `-look_ahead 1`, `-look_ahead_depth 40`, `-adaptive_i 1`, `-adaptive_b 1`. These were already partially applied in a prior session; this session cleaned up the remaining dead code.
+
+---
+
 ### ISS-008 — FFmpeg binary path is hardcoded
 **Type:** Limitation  
 **Files:** `x265transcoder.py`
@@ -186,3 +198,4 @@ When the background scan thread held a write lock on `/config/media.db`, any con
 | IMP-007 | Make FFmpeg path configurable (ISS-008) | Low |
 | IMP-008 | Add input validation on transcode form (ISS-007) | Medium |
 | IMP-009 | Replace `ps aux` job detection with PID file (ISS-003) | Low |
+| IMP-010 | ~~Fix dead `-x265-params` and optimise QSV encode settings (ISS-013)~~ | ~~Medium~~ Done |

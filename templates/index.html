@@ -56,6 +56,10 @@
                 <progress id="job-progress" value="{{ job_progress }}" max="100"></progress>
                 <span class="progress-text">{{ job_progress }}%</span>
             </div>
+
+            {% if eta %}
+            <p class="progress-eta">Estimated time remaining: <strong>{{ eta }}</strong></p>
+            {% endif %}
             {% else %}
             <p class="progress-loading">Progress will be shown shortly once the job is underway...</p>
             {% endif %}
