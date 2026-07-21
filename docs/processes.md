@@ -276,3 +276,46 @@ Returns a JSON object with the current scan state:
 ```
 
 Used by the recommendations page meta-refresh (or optionally by JS fetch for finer-grained polling).
+
+---
+
+## 14. Transcode History Recording (modules/history.py)
+
+**Trigger:** Called by `x265transcoder.py` during job execution.
+
+### 14a. Job Start
+
+1. `start_job(directory, quality, delete_originals)` is called at the beginning of `x265transcoder.py`.
+2. Inserts a row into `transcode_jobs` with status `'running'`.
+3. Returns the `job_id` used to associate per-file records.
+
+### 14b. Per-File Recording
+
+After each file in the transcode loop, `record_file()` is called with one of three statuses:
+
+- **`"success"`** — file transcoded and validated. Records original/new sizes, quality, duration.
+- **`"failed"`** — file transcoded but failed validation (size, duration, or frame count mismatch). Records sizes, duration, and failure reason.
+- **`"skipped"`** — file is already x265. Records original size only.
+
+### 14c. Job Completion
+
+1. `complete_job()` is called after the transcode loop finishes.
+2. Updates the `transcode_jobs` row with: completed timestamp, file counts, total sizes, space saved, and final status (`"success"` or `"completed_with_failures"`).
+
+---
+
+## 15. History UI (GET /history, GET /history/<job_id>)
+
+**File:** `flaskapp.py → history()`, `history_detail()`
+
+### GET /history
+
+1. Calls `get_job_history(limit=20)` for recent jobs.
+2. Calls `get_lifetime_stats()` for all-time aggregates (total jobs, files transcoded, space saved, average compression %).
+3. Renders `templates/history.html` with job list and stats panel.
+
+### GET /history/<job_id>
+
+1. Calls `get_job_history()` to get the job list (for context).
+2. Calls `get_job_files(job_id)` for per-file detail of the selected job.
+3. Renders `templates/history.html` with the detail panel expanded, showing per-file results (filename, status, original/new size, space saved, duration).

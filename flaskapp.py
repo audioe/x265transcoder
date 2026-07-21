@@ -6,6 +6,7 @@ import logging
 import threading
 from apscheduler.schedulers.background import BackgroundScheduler
 from modules.scanner import run_scan, get_recommendations, get_scan_status, get_scan_history
+from modules.history import get_job_history, get_job_files, get_lifetime_stats
 
 app = Flask(__name__)
 
@@ -171,7 +172,16 @@ def index():
             except:
                 total_files = "Loading..."
                 pass
-    return render_template('index.html', version=version, os=os, config=config, transcoder_status=transcoder_status, job_directory=job_directory, job_progress=job_progress, file_progress=file_progress, current_file_number=current_file_number, current_file=current_file, total_files=total_files)
+
+    # Get library summary stats for the dashboard (when idle)
+    dashboard_stats = get_recommendations(limit=0).get('stats', {}) if not transcoder_status else {}
+
+    return render_template('index.html', version=version, os=os, config=config,
+                           transcoder_status=transcoder_status, job_directory=job_directory,
+                           job_progress=job_progress, file_progress=file_progress,
+                           current_file_number=current_file_number, current_file=current_file,
+                           total_files=total_files, dashboard_stats=dashboard_stats,
+                           active_page='home')
 
 @app.route('/setup', methods=['GET', 'POST'])
 def setup():
@@ -232,7 +242,7 @@ def load_directories():
             'path': os.path.join(parent_dir, entry),
             'size': str(get_directory_size(os.path.join(parent_dir, entry))) + " GB"
         } for entry in os.listdir(parent_dir) if os.path.isdir(os.path.join(parent_dir, entry))], key=lambda x: x['name'].lower())
-        html = render_template('index.html', subdirectories=subdirectories, version=version, os=os, current_dir=parent_dir, parent_dir=parent_dir, config=config, films='films')
+        html = render_template('index.html', subdirectories=subdirectories, version=version, os=os, current_dir=parent_dir, parent_dir=parent_dir, config=config, films='films', active_page='home')
     else:
         # If the selected parent directory is for shows, render the folder selection form
         directories = sorted([{
@@ -240,7 +250,7 @@ def load_directories():
             'path': os.path.join(parent_dir, entry),
             'size': str(get_directory_size(os.path.join(parent_dir, entry))) + " GB"
         } for entry in os.listdir(parent_dir) if os.path.isdir(os.path.join(parent_dir, entry))], key=lambda x: x['name'].lower())
-        html = render_template('index.html', directories=directories, version=version, os=os, config=config)
+        html = render_template('index.html', directories=directories, version=version, os=os, config=config, active_page='home')
     return html
 
 # Route to handle loading subdirectories (for TV shows)
@@ -254,12 +264,12 @@ def load_subdirectories():
         subdirectories = sorted([{'name': entry, 'path': os.path.join(current_dir, entry), 'size': str(get_directory_size(os.path.join(current_dir, entry))) + " GB"}
                                  for entry in os.listdir(current_dir)
                                  if os.path.isdir(os.path.join(current_dir, entry))], key=lambda x: x['name'].lower())
-        html = render_template('index.html', subdirectories=subdirectories, version=version, os=os, current_dir=current_dir, parent_dir=parent_dir, config=config, shows='shows')
+        html = render_template('index.html', subdirectories=subdirectories, version=version, os=os, current_dir=current_dir, parent_dir=parent_dir, config=config, shows='shows', active_page='home')
     else:
         directories = sorted([{'name': entry, 'path': os.path.join(parent_dir, entry), 'size': str(get_directory_size(os.path.join(parent_dir, entry))) + " GB"}
                               for entry in os.listdir(parent_dir)
                               if os.path.isdir(os.path.join(parent_dir, entry))], key=lambda x: x['name'].lower())
-        html = render_template('index.html', directories=directories, version=version, os=os, current_dir=parent_dir, parent_dir=parent_dir, config=config)
+        html = render_template('index.html', directories=directories, version=version, os=os, current_dir=parent_dir, parent_dir=parent_dir, config=config, active_page='home')
 
     return html
 
@@ -344,7 +354,7 @@ def recommendations():
     transcoder_running = transcode_check('x265transcoder.py')
     return render_template('recommendations.html', version=version, config=config,
                            data=data, scan_status=scan_status, scan_history=history,
-                           transcoder_running=transcoder_running)
+                           transcoder_running=transcoder_running, active_page='recommendations')
 
 
 @app.route('/scan_now', methods=['POST'])
@@ -374,6 +384,30 @@ def scan_now():
 def scan_status_endpoint():
     """JSON endpoint for polling scan progress."""
     return jsonify(get_scan_status())
+
+
+# --- Transcode History Routes ---
+
+@app.route('/history')
+def history():
+    jobs = get_job_history(limit=20)
+    stats = get_lifetime_stats()
+    return render_template('history.html', version=version, jobs=jobs, stats=stats, active_page='history')
+
+
+@app.route('/history/<int:job_id>')
+def history_detail(job_id):
+    jobs = get_job_history(limit=20)
+    # Find the specific job summary
+    job = None
+    for j in jobs:
+        if j["id"] == job_id:
+            job = j
+            break
+    files = get_job_files(job_id)
+    stats = get_lifetime_stats()
+    return render_template('history.html', version=version, jobs=jobs, stats=stats,
+                           selected_job=job, selected_files=files, active_page='history')
 
 
 if __name__ == '__main__':

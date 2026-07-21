@@ -129,9 +129,12 @@ data = {'job_directory': job_data, 'progress': "0"}
 ### ISS-010 — Progress meta-refresh is not used for films jobs
 **Type:** Bug  
 **Severity:** Low  
-**Files:** `templates/index.html`
+**Files:** `templates/index.html`  
+**Status:** Resolved
 
 The auto-refresh `<meta>` tag is rendered when `transcoder_status == True`, but the "in progress" display branches on whether `"films"` appears in `job` (the `job_directory` value). The films branch does not display progress bars — it only shows the directory name. The progress bars are only shown in the shows branch, and only when `current_file` does not contain `"Loading"`. This may be intentional, but is undocumented.
+
+**Resolution (2026-07-20):** Rewrote `index.html` progress display. Both films and shows now show the same progress UI (current file, file/job progress bars). The `<meta refresh>` tag was also moved from `<body>` to `<head>` where it belongs.
 
 ---
 

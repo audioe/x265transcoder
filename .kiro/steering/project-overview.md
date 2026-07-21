@@ -15,9 +15,11 @@ A Dockerised web application that batch-transcodes video libraries from H.264 (x
 | `flaskapp.py` | Flask web UI, job dispatcher, and scheduler host (port 5000) |
 | `x265transcoder.py` | Background transcode engine; spawned by Flask via `subprocess.Popen` |
 | `modules/scanner.py` | Scheduled media inventory scanner; writes `/config/media.db` (SQLite). Runs nightly at 04:00 via APScheduler |
+| `modules/history.py` | Transcode job history; records per-file results and per-job summaries to `/config/media.db` |
 | `modules/collector.py` | Legacy media inventory scanner; writes `/config/db.yaml` (dormant — superseded by scanner.py) |
 | `templates/index.html` | Main Jinja2 template — renders all transcoder UI states |
 | `templates/recommendations.html` | Recommendations page — library stats, top x264 films/shows sorted by size |
+| `templates/history.html` | Transcode history page — lifetime stats, job list, per-job file detail drill-down |
 | `templates/setup.html` | Initial configuration setup form |
 | `ref/config.yaml` | Reference config template; live config must be at `/config/config.yaml` |
 | `dockerfile` | Container definition; installs jellyfin-ffmpeg6 and Intel QSV drivers |

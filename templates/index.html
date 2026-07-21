@@ -1,102 +1,169 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>x265 Transcoder</title>
+    <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>x265 Transcoder</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+    {% if transcoder_status == True %}
+    <meta http-equiv="refresh" content="5">
+    {% endif %}
 </head>
 <body>
-    <div class="container">
-        <div class="edit-config-container">
-            <a href="{{ url_for('setup') }}" class="edit-config-button">Edit Config</a>
-            <a href="{{ url_for('recommendations') }}" class="edit-config-button">Recommendations</a>
+    <!-- Navigation -->
+    <nav class="main-nav">
+        <div class="nav-brand">x265 Transcoder</div>
+        <div class="nav-links-bar">
+            <a href="{{ url_for('index') }}" class="nav-link {% if active_page == 'home' %}active{% endif %}">Transcode</a>
+            <a href="{{ url_for('recommendations') }}" class="nav-link {% if active_page == 'recommendations' %}active{% endif %}">Recommendations</a>
+            <a href="{{ url_for('history') }}" class="nav-link {% if active_page == 'history' %}active{% endif %}">History</a>
+            <a href="{{ url_for('setup') }}" class="nav-link nav-link-secondary">Settings</a>
         </div>
-        <h1>x265 Transcoder</h1>
-        <h2>Version {{ version }}</h2>
-        <hr>
+        <span class="nav-version">v{{ version }}</span>
+    </nav>
+
+    <div class="container page-content">
+
+        <!-- Job In Progress -->
         {% if transcoder_status == True %}
-        <meta http-equiv="refresh" content="5">
-        {% if "films" in job %}
-        <p>There is already a transcode job in progress for a Film:</p>
-        <p>Directory: {{ job_directory }}</p>
-        {% else %}
-        <p>There is already a transcode job in progress for a TV Show:</p>
-        <p>Directory: {{ job_directory }}</p>
-        {% if "Loading" in current_file %}
-        <p>Progress will be shown shortly once the job is underway...</p>
-        {% else %}
-        <p>Working on {{ current_file }}, item {{ current_file_number }} of {{ total_files }}</p>
-        <label for="file-progress">File Progress:</label>
-        <div class="progress-container">
-            <progress id="file-progress" value={{ file_progress }} max="100"></progress>
-            <span id="file-progress-label" class="progress-text">{{ file_progress }}%
-        </div>
-        <label for="job-progress">Overall Job Progress:</label>
-        <div class="progress-container">
-            <progress id="job-progress" value={{ job_progress }} max="100"></progress>
-            <span id="job-progress-label" class="progress-text">{{ job_progress }}%
-        </div>
-        {% endif %}
-        {% endif %}
-        {% else %}
-        <form method="post" action="{{ url_for('load_directories') }}">
-            <label>What type of library are you looking to Transcode?:</label>
-            <div class="library-type">
-                <input type="radio" id="shows" name="parent_dir" value="{{ config['libraries']['shows'] }}">
-                <label for="shows">Shows</label>
+        <div class="progress-panel">
+            <h3>Transcode In Progress</h3>
+            <p class="progress-directory">
+                {% if job_directory and "films" in job_directory %}
+                    <strong>Film:</strong>
+                {% else %}
+                    <strong>Show:</strong>
+                {% endif %}
+                {{ job_directory.split('/')[-1] if job_directory else 'Unknown' }}
+            </p>
+
+            {% if current_file and "Loading" not in current_file %}
+            <p class="progress-file-info">
+                Working on <strong>{{ current_file }}</strong>
+                {% if current_file_number and total_files %}
+                    (file {{ current_file_number }} of {{ total_files }})
+                {% endif %}
+            </p>
+
+            <label for="file-progress">File Progress:</label>
+            <div class="progress-container">
+                <progress id="file-progress" value="{{ file_progress }}" max="100"></progress>
+                <span class="progress-text">{{ file_progress }}%</span>
             </div>
-            <div class="library-type">
-                <input type="radio" id="films" name="parent_dir" value="{{ config['libraries']['films'] }}">
-                <label for="films">Films</label>
+
+            <label for="job-progress">Overall Job Progress:</label>
+            <div class="progress-container">
+                <progress id="job-progress" value="{{ job_progress }}" max="100"></progress>
+                <span class="progress-text">{{ job_progress }}%</span>
             </div>
-            <input type="submit" value="Load Directories">
-        </form>
+            {% else %}
+            <p class="progress-loading">Progress will be shown shortly once the job is underway...</p>
+            {% endif %}
+        </div>
+
+        <!-- Idle State -->
+        {% else %}
+
+        <!-- Dashboard summary (if scan data exists) -->
+        {% if dashboard_stats %}
+        <div class="dashboard-summary">
+            <div class="dashboard-cards">
+                <div class="dashboard-card">
+                    <span class="dashboard-value">{{ dashboard_stats.x264_count }}</span>
+                    <span class="dashboard-label">x264 files remaining</span>
+                </div>
+                <div class="dashboard-card">
+                    <span class="dashboard-value">{{ dashboard_stats.x264_size_gb }} GB</span>
+                    <span class="dashboard-label">x264 library size</span>
+                </div>
+                <div class="dashboard-card">
+                    <span class="dashboard-value">{{ dashboard_stats.x265_count }}</span>
+                    <span class="dashboard-label">x265 files complete</span>
+                </div>
+            </div>
+        </div>
         {% endif %}
+
+        <!-- Library type selection form -->
+        <div class="transcode-section">
+            <h3>Start a Transcode Job</h3>
+            <form method="post" action="{{ url_for('load_directories') }}" id="library-form">
+                <label>Select library type:</label>
+                <div class="library-type-options">
+                    <div class="library-type">
+                        <input type="radio" id="shows" name="parent_dir" value="{{ config['libraries']['shows'] }}">
+                        <label for="shows">TV Shows</label>
+                    </div>
+                    <div class="library-type">
+                        <input type="radio" id="films" name="parent_dir" value="{{ config['libraries']['films'] }}">
+                        <label for="films">Films</label>
+                    </div>
+                </div>
+                <input type="submit" value="Load Directories">
+            </form>
+        </div>
+        {% endif %}
+
+        <!-- Directory selection (Shows) -->
         {% if directories %}
-        <form method="post" action="{{ url_for('load_subdirectories') }}">
-            <input type="hidden" id="parent_dir" name="parent_dir" value="{{ parent_dir or '/shows' }}">
-            <label for="folder">Folder:</label>
-            <select name="folder" id="folder">
-                {% for directory in directories %}
-                <option value="{{ directory.path }}">{{ directory.name }} ({{directory.size}})</option>
-                {% endfor %}
-            </select>
-            <input type="submit" value="Load Subdirectories">
-        </form>
+        <div class="transcode-section">
+            <h3>Select a Show</h3>
+            <p class="back-link"><a href="{{ url_for('index') }}">&larr; Back to library selection</a></p>
+            <form method="post" action="{{ url_for('load_subdirectories') }}">
+                <input type="hidden" id="parent_dir" name="parent_dir" value="{{ parent_dir or '/shows' }}">
+                <label for="folder">Show:</label>
+                <select name="folder" id="folder">
+                    {% for directory in directories %}
+                    <option value="{{ directory.path }}">{{ directory.name }} ({{ directory.size }})</option>
+                    {% endfor %}
+                </select>
+                <input type="submit" value="Select Show">
+            </form>
+        </div>
         {% elif subdirectories %}
-        {% if shows %}
-        <p>Show selected: <span style="font-weight: bold; font-size: 1.2em;">{{ current_dir.split('/')[-1] }}</span></p>
-        {% elif films %}
-        <p>Select a Film directory:</p>
-        {% endif %}
-        <form method="post" action="{{ url_for('run') }}">
-            <label for="folder">Folder:</label>
-            <select name="folder" id="folder">
-                {% for subdirectory in subdirectories %}
-                <option value="{{ subdirectory.path }}">{{ subdirectory.name }} ({{ subdirectory.size }})</option>
-                {% endfor %}
-            </select>
-            <label for="include">Include:</label>
-            <input type="text" id="include" name="include" value="{{ include }}">
-            <label for="quality" class="tooltip-label">
-                Choose a Quality:
-                <span class="info-icon" title="This sets the quality of the transcoded video. 18 is considered the best quality, but largest resulting file size. 25 would result in the smallest file size, but may be visually noticeable. 23 is a solid middle-ground for quality vs file size if unsure."></span>
-            </label>
-            <div class="slider-container">
-                <input type="range" id="quality" name="quality" min="18" max="25" step="1" value="23" oninput="updateQualityValue(this.value)">
-                <span id="quality-value">23
-            </div>
-            <label for="delete">Delete after Transcoding?</label>
-            <label class="switch">
-                <input type="checkbox" id="delete" name="delete" value="Yes" checked>
-                <span class="slider round">
-            </label>
-            <input type="submit" value="Submit">
-        </form>
+        <!-- Season/Film selection with transcode options -->
+        <div class="transcode-section">
+            {% if shows %}
+            <h3>Select a Season</h3>
+            <p class="back-link"><a href="{{ url_for('index') }}">&larr; Back to library selection</a></p>
+            <p>Show: <strong>{{ current_dir.split('/')[-1] }}</strong></p>
+            {% elif films %}
+            <h3>Select a Film</h3>
+            <p class="back-link"><a href="{{ url_for('index') }}">&larr; Back to library selection</a></p>
+            {% endif %}
+            <form method="post" action="{{ url_for('run') }}">
+                <label for="folder">Folder:</label>
+                <select name="folder" id="folder">
+                    {% for subdirectory in subdirectories %}
+                    <option value="{{ subdirectory.path }}">{{ subdirectory.name }} ({{ subdirectory.size }})</option>
+                    {% endfor %}
+                </select>
+
+                <label for="include">Include files matching:</label>
+                <input type="text" id="include" name="include" value=".mkv" placeholder=".mkv">
+
+                <label for="quality" class="tooltip-label">
+                    Quality (CQP):
+                    <span class="info-icon" title="18 = best quality (largest file). 25 = smallest file (may be noticeable). 23 = recommended balance."></span>
+                </label>
+                <div class="slider-container">
+                    <input type="range" id="quality" name="quality" min="18" max="25" step="1" value="23" oninput="updateQualityValue(this.value)">
+                    <span id="quality-value">23</span>
+                </div>
+
+                <label for="delete">Delete originals after transcoding?</label>
+                <label class="switch">
+                    <input type="checkbox" id="delete" name="delete" value="Yes" checked>
+                    <span class="slider round"></span>
+                </label>
+
+                <input type="submit" value="Start Transcode">
+            </form>
+        </div>
         {% endif %}
     </div>
 
-    <!-- Loading icon -->
+    <!-- Loading overlay -->
     <div id="loading-icon" style="display: none;">
         <img src="{{ url_for('static', filename='loading.gif') }}" alt="Loading...">
     </div>
@@ -105,37 +172,34 @@
         function updateQualityValue(value) {
             document.getElementById('quality-value').textContent = value;
         }
-    </script>
-    <script>
+
+        // Show loading spinner when the library form is submitted
         document.addEventListener('DOMContentLoaded', function() {
-            const form = document.querySelector('form');
+            const libraryForm = document.getElementById('library-form');
             const loadingIcon = document.getElementById('loading-icon');
 
-            form.addEventListener('submit', function(event) {
-                event.preventDefault();
+            if (libraryForm) {
+                libraryForm.addEventListener('submit', function(event) {
+                    event.preventDefault();
+                    loadingIcon.style.display = 'flex';
 
-                // Show the loading icon
-                loadingIcon.style.display = 'flex';
-
-                // Send the AJAX request
-                const formData = new FormData(form);
-                fetch('{{ url_for('load_directories') }}', {
-                    method: 'POST',
-                    body: formData
-                })
-                .then(response => response.text())
-                .then(data => {
-                    // Update the page with the new content
-                    document.body.innerHTML = data;
-                })
-                .catch(error => {
-                    console.error('Error:', error);
-                })
-                .finally(() => {
-                    // Hide the loading icon
-                    loadingIcon.style.display = 'none';
+                    const formData = new FormData(libraryForm);
+                    fetch(libraryForm.action, {
+                        method: 'POST',
+                        body: formData
+                    })
+                    .then(response => response.text())
+                    .then(data => {
+                        document.open();
+                        document.write(data);
+                        document.close();
+                    })
+                    .catch(error => {
+                        console.error('Error:', error);
+                        loadingIcon.style.display = 'none';
+                    });
                 });
-            });
+            }
         });
     </script>
 </body>

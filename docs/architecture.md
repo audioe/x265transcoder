@@ -90,6 +90,16 @@ The scheduled media inventory scanner. Replaces `collector.py` as the active lib
 - Provides `get_scan_history()` for the most recent scan records.
 - Triggered nightly at 04:00 via APScheduler, or manually via `POST /scan_now` (runs in background thread).
 
+### modules/history.py
+
+Transcode job history recorder. Responsibilities:
+
+- Stores per-file transcode results (original/new size, codec, quality, duration, status, failure reason) in the `transcode_files` table.
+- Stores per-job summaries (directory, timestamps, file counts, total space saved, quality, delete setting) in the `transcode_jobs` table.
+- Called by `x265transcoder.py` at job start (`start_job`), after each file (`record_file`), and at job end (`complete_job`).
+- Provides query functions for Flask: `get_job_history()`, `get_job_files()`, `get_lifetime_stats()`.
+- Uses the shared SQLite database at `/config/media.db` (same as `scanner.py`).
+
 ### modules/collector.py
 
 A legacy standalone scan utility (superseded by `scanner.py` but retained for backward compatibility). Responsibilities:

@@ -10,14 +10,19 @@
     {% endif %}
 </head>
 <body>
-    <div class="container recommendations-container">
-        <h1>x265 Transcoder</h1>
-        <h2>Version {{ version }}</h2>
-        <hr>
-
-        <div class="nav-links">
-            <a href="{{ url_for('index') }}">&larr; Back to Transcoder</a>
+    <!-- Navigation -->
+    <nav class="main-nav">
+        <div class="nav-brand">x265 Transcoder</div>
+        <div class="nav-links-bar">
+            <a href="{{ url_for('index') }}" class="nav-link {% if active_page == 'home' %}active{% endif %}">Transcode</a>
+            <a href="{{ url_for('recommendations') }}" class="nav-link {% if active_page == 'recommendations' %}active{% endif %}">Recommendations</a>
+            <a href="{{ url_for('history') }}" class="nav-link {% if active_page == 'history' %}active{% endif %}">History</a>
+            <a href="{{ url_for('setup') }}" class="nav-link nav-link-secondary">Settings</a>
         </div>
+        <span class="nav-version">v{{ version }}</span>
+    </nav>
+
+    <div class="container recommendations-container page-content">
 
         <!-- Scan Status Panel (shown when scan is running or recently completed) -->
         {% if scan_status.running %}
