@@ -205,23 +205,25 @@ if __name__ == '__main__':
                 starttime = datetime.now()
                 cmd = [
                     "/usr/lib/jellyfin-ffmpeg/ffmpeg",
-                    "-c:v", "h264_qsv",
                     "-i", f"{file_path}_old",
                     "-pix_fmt", "p010le",
                     "-map_chapters", "0",
                     "-metadata", f"title={filetitle}",
-                    "-map", "0:0",  # Corrected placement of mapping
+                    "-map", "0:v:0",
                     "-c:v", "hevc_qsv",
                     "-x265-params", f"{params}",
-                    "-map", "0:a",  # Corrected placement of mapping
+                    "-map", "0:a",
                     "-rc_mode", "CQP",
                     "-global_quality", f"{quality}",
                     "-c:a", "copy",
+                    "-map", "0:s?",
+                    "-c:s", "copy",
                     "-preset", "fast",
                     "-stats_period", "15",
                     outputfile
                 ]
 
+                logging.info(f"FFmpeg command: {' '.join(cmd)}")
                 process = FfmpegProgress(cmd)
                 
                 for file_progress_percentage in process.run_command_with_progress():

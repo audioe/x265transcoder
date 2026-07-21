@@ -140,6 +140,23 @@ The auto-refresh `<meta>` tag is rendered when `transcoder_status == True`, but 
 
 ## Resolved Issues
 
+### ISS-012 — QSV hardware decoder silently drops frames on certain streams
+**Type:** Bug  
+**Severity:** High  
+**Files:** `x265transcoder.py`  
+**Resolved:** 2026-07-21
+
+The FFmpeg command used `-c:v h264_qsv` to force QSV hardware decoding of the input stream. On certain files (e.g. IMAX variable aspect ratio, unusual NAL units, high-profile features), the QSV decoder silently dropped frames without raising errors, producing a truncated output that FFmpeg still reported as 100% complete. Post-transcode validation passed because the file was smaller and `pymediainfo` could still read it.
+
+**Root cause:** QSV hardware decoders have limited compatibility with complex H.264 streams compared to software decoders.
+
+**Fix applied:**
+- Removed `-c:v h264_qsv` input decoder flag. FFmpeg now uses software decoding (auto-selects correct decoder) for the input.
+- QSV is still used for the output encoder (`hevc_qsv`) where the performance benefit matters.
+- Also added `-map 0:s? -c:s copy` to preserve subtitle streams, and improved logging (full FFmpeg command now logged).
+
+---
+
 ### ISS-011 — SQLite "database is locked" error on concurrent access
 **Type:** Bug  
 **Severity:** High  

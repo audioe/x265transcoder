@@ -113,13 +113,13 @@ For each file in the list:
    d. Determines output filename: if `"264"` appears in the filename it is replaced with `"265"`; otherwise the original path is used as output.
 
    e. Builds the `ffmpeg` command array targeting `/usr/lib/jellyfin-ffmpeg/ffmpeg` with:
-      - Input decoder: `h264_qsv` (hardware H.264 decode)
-      - Input: `file_path_old`
+      - Input: `file_path_old` (software decode — no hardware input decoder)
       - Pixel format: `p010le` (10-bit)
       - Metadata: `title` set to the original filename
-      - Video streams: `0:0` mapped, encoded with `hevc_qsv`
+      - Video streams: `0:v:0` mapped, encoded with `hevc_qsv`
       - x265 params: `repeat-headers=1:profile=main10:level=5.1`
       - Audio streams: `0:a` mapped, copied without re-encoding
+      - Subtitle streams: `0:s?` mapped, copied
       - Rate control: `CQP` with `global_quality` set to the user-supplied value
       - Preset: `fast`
       - Stats period: 15 seconds
