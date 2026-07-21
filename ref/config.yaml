@@ -4,3 +4,6 @@ secrets:
 libraries:
   shows: <shows_directory>
   films: <films_directory>
+# Encoder: auto | qsv | vaapi | nvenc | software
+# 'auto' detects available hardware (Intel QSV > AMD VAAPI > NVIDIA NVENC > software fallback)
+encoder: auto

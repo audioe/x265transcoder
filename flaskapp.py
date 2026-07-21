@@ -214,7 +214,8 @@ def setup():
             'libraries': {
                 'shows': shows_directory,
                 'films': films_directory
-            }
+            },
+            'encoder': request.form.get('encoder', 'auto')
         }
 
         with open('/config/config.yaml', 'w') as f:
@@ -234,13 +235,16 @@ def setup():
     use_telegram = bool(config.get('secrets', {}).get('TELEGRAM_TOKEN'))
     telegram_chat_id = config.get('secrets', {}).get('TELEGRAM_CHATID', '')
     telegram_token = config.get('secrets', {}).get('TELEGRAM_TOKEN', '')
+    current_encoder = config.get('encoder', 'auto')
 
     return render_template('setup.html', 
                            default_shows=default_shows, 
                            default_films=default_films,
                            use_telegram=use_telegram,
                            telegram_chat_id=telegram_chat_id,
-                           telegram_token=telegram_token)
+                           telegram_token=telegram_token,
+                           current_encoder=current_encoder,
+                           version=version)
 
 # Route to handle loading directories
 @app.route('/load_directories', methods=['POST'])

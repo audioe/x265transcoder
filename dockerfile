@@ -38,8 +38,15 @@ RUN \
     && apt-get update \
     && apt-get install -y jellyfin-ffmpeg6
 
-# Install gpu dependencies
-RUN apt install -y onevpl-tools vainfo intel-media-va-driver-non-free
+# Install GPU dependencies (Intel QSV, AMD VAAPI, and common VA-API tools)
+RUN apt install -y \
+    vainfo \
+    onevpl-tools \
+    intel-media-va-driver-non-free \
+    mesa-va-drivers
+
+# Note: NVIDIA NVENC requires the NVIDIA Container Toolkit on the host.
+# The nvidia-smi binary is mounted at runtime via --gpus flag, not installed here.
 
 # Install nano to help with troubleshooting and testing
 RUN apt install -y nano

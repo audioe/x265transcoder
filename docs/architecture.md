@@ -110,6 +110,16 @@ A legacy standalone scan utility (superseded by `scanner.py` but retained for ba
 - Writes a structured inventory to `/config/db.yaml` grouped by `category → codec → directory → filename: size_GB`.
 - Removes the alternate-codec entry for a directory when one side is found (prevents stale records after a successful transcode).
 
+### modules/encoder.py
+
+Hardware encoder detection and FFmpeg command builder. Responsibilities:
+
+- Auto-detects available hardware encoders by probing `vainfo` (Intel QSV / AMD VAAPI) and `nvidia-smi` (NVENC).
+- Resolves the active encoder from config (`auto`, `qsv`, `vaapi`, `nvenc`, `software`) or falls back to auto-detection.
+- Builds the complete FFmpeg command with encoder-specific flags (pixel format, rate control, presets, device paths).
+- Detection priority: Intel QSV → AMD VAAPI → NVIDIA NVENC → software (libx265).
+- Called by `x265transcoder.py` at startup to determine and log the active encoder.
+
 ### templates/index.html + static/
 
 Single Jinja2 template that renders all UI states:
@@ -202,7 +212,7 @@ Key fields written by `x265transcoder.py`:
 | Web framework | Flask | Lightweight; minimal overhead for a single-user internal tool |
 | Template engine | Jinja2 (bundled with Flask) | No separate build step required |
 | Frontend UI | Dark theme, CSS-only charts, CSS animations | Modern look without JS frameworks; Inter font via Google Fonts; conic-gradient donut chart and animated bar charts for data visualization |
-| Hardware encoder | `hevc_qsv` via jellyfin-ffmpeg | Jellyfin's FFmpeg build bundles QSV support; avoids manual FFmpeg compilation |
+| Hardware encoder | `hevc_qsv`, `hevc_vaapi`, `hevc_nvenc`, `libx265` via jellyfin-ffmpeg | Auto-detects Intel QSV, AMD VAAPI, NVIDIA NVENC; falls back to software. Configurable via `config.yaml` encoder field |
 | Progress tracking | `ffmpeg-progress-yield` | Parses FFmpeg stderr to yield per-frame % without custom regex |
 | Media analysis | `pymediainfo` (Python binding for libmediainfo) | More reliable than parsing `ffmpeg -i` output; works on all common containers |
 | Config format | YAML | Human-readable; supports the nested structure needed for libraries + secrets |

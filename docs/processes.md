@@ -90,6 +90,8 @@ Triggered when the user selects a show from the directory list.
 2. Assigns all positional arguments to named variables.
 3. Initialises counters: `OldFolderSizeBytes`, `NewFolderSizeBytes`, `Successful`, `SuccessfulCount`, `Failed`, `FailedCount`, `SkippedCount`.
 4. Configures the Python logger to write to `/logs/transcode_<DD-MM-YY_HH-MM-SS>.log`.
+5. Reads `/config/config.yaml` to get the `encoder` setting (defaults to `auto` if absent).
+6. Calls `resolve_encoder()` which either uses the configured value or auto-detects hardware via `vainfo`/`nvidia-smi`. Logs the resolved encoder name.
 
 ### 6b. File Discovery
 
@@ -114,19 +116,18 @@ For each file in the list:
 
    d. Determines output filename: if `"264"` appears in the filename it is replaced with `"265"`; otherwise the original path is used as output.
 
-   e. Builds the `ffmpeg` command array targeting `/usr/lib/jellyfin-ffmpeg/ffmpeg` with:
+   e. Calls `build_ffmpeg_cmd()` from `modules/encoder.py` to construct the FFmpeg command for the resolved encoder. Common settings across all encoders:
       - Input: `file_path_old` (software decode — no hardware input decoder)
-      - Pixel format: `p010le` (10-bit)
       - Metadata: `title` set to the original filename
-      - Video streams: `0:v:0` mapped, encoded with `hevc_qsv`
-      - Profile: `main10` (QSV-native via `-profile:v`)
       - Audio streams: `0:a` mapped, copied without re-encoding
       - Subtitle streams: `0:s?` mapped, copied
-      - Rate control: `CQP` with `global_quality` set to the user-supplied value
-      - Preset: `medium`
-      - Lookahead: enabled (`-look_ahead 1 -look_ahead_depth 40`)
-      - Adaptive frame placement: enabled (`-adaptive_i 1 -adaptive_b 1`)
       - Stats period: 15 seconds
+
+      Encoder-specific settings:
+      - **Intel QSV:** `-c:v hevc_qsv`, profile main10, p010le pixel format, CQP rate control, lookahead, adaptive I/B frames, preset medium
+      - **AMD VAAPI:** `-c:v hevc_vaapi`, VAAPI device `/dev/dri/renderD128`, hwupload filter, profile main10, CQP rate control
+      - **NVIDIA NVENC:** `-c:v hevc_nvenc`, profile main10, p010le pixel format, constqp rate control, preset p5, b_ref_mode middle
+      - **Software:** `-c:v libx265`, yuv420p10le pixel format, CRF rate control, x265-params for profile/level, preset medium
 
    f. Wraps the command in `FfmpegProgress` and iterates progress events:
       - Writes `file_progress` percentage to `/config/job.yaml`.

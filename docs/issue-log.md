@@ -110,9 +110,9 @@ The FFmpeg command passes `-x265-params "repeat-headers=1:profile=main10:level=5
 
 ### ISS-008 — FFmpeg binary path is hardcoded
 **Type:** Limitation  
-**Files:** `x265transcoder.py`
+**Files:** `modules/encoder.py`
 
-The FFmpeg binary path `/usr/lib/jellyfin-ffmpeg/ffmpeg` is hardcoded in the transcode command. If the Jellyfin FFmpeg package changes its install path or the container base changes, the transcoder will silently fail.
+The FFmpeg binary path `/usr/lib/jellyfin-ffmpeg/ffmpeg` is defined as `FFMPEG_PATH` in `modules/encoder.py`. It is now centralized in one place (previously hardcoded in `x265transcoder.py`), but still not configurable at runtime.
 
 **Suggested fix:** Make the FFmpeg path configurable via `config.yaml` or an environment variable with the current path as the default.
 
@@ -151,6 +151,23 @@ The auto-refresh `<meta>` tag is rendered when `transcoder_status == True`, but 
 ---
 
 ## Resolved Issues
+
+### ISS-014 — Job history stuck in "Running" if Telegram notification fails
+**Type:** Bug  
+**Severity:** Medium  
+**Files:** `x265transcoder.py`  
+**Resolved:** 2026-07-21
+
+The `complete_job()` call was positioned **after** the `send_telegram_message()` calls at the end of `convert_job()`. If Telegram's API failed with an unhandled exception (timeout, DNS failure, network error), `complete_job()` was never reached, leaving the job record permanently in "running" status in the database.
+
+Additionally, the second `send_telegram_message` call had a broken indentation — it was outside the `if/else` block, causing the success message to always be sent regardless of whether failures occurred.
+
+**Fix applied:**
+- Moved `complete_job()` to execute **before** any Telegram notification attempts.
+- Fixed `send_telegram_message` indentation so success/failure messages are mutually exclusive.
+- Added missing `Successful.append(filetitle)` so the success list is actually populated.
+
+---
 
 ### ISS-012 — QSV hardware decoder silently drops frames on certain streams
 **Type:** Bug  

@@ -4,22 +4,33 @@
 
 ### Host Hardware
 
-- Intel CPU with integrated or discrete GPU supporting Intel Quick Sync Video (QSV).
-- Recommended minimum: 6th-generation Intel Core (Skylake) for H.264 decode + HEVC encode.
-- For 10-bit HEVC encoding (`p010le` pixel format): 7th-generation (Kaby Lake) or later.
+The transcoder supports multiple hardware encoders with automatic detection. At least one of the following is recommended for reasonable performance:
+
+| GPU Vendor | Minimum Hardware | Encoder |
+|-----------|-----------------|---------|
+| Intel | 6th-gen Core (Skylake) iGPU; 7th-gen+ for 10-bit | Intel QSV (`hevc_qsv`) |
+| AMD | Ryzen 2000+ APU or RX 400+ discrete GPU (VCN) | AMD VAAPI (`hevc_vaapi`) |
+| NVIDIA | GeForce GTX 960+ or Quadro with NVENC | NVIDIA NVENC (`hevc_nvenc`) |
+| None | Any CPU | Software (`libx265`) — much slower |
 
 ### Host Software
 
 - Docker Engine 20.10 or later.
-- Intel media drivers installed on the host:
-  - Debian/Ubuntu: `intel-media-va-driver-non-free`, `onevpl-tools`, `vainfo`
-  - These are also installed inside the container image, but the host `/dev/dri` device must be accessible.
+- **Intel QSV:** Intel media drivers on the host (`intel-media-va-driver-non-free`). Pass `/dev/dri` to the container.
+- **AMD VAAPI:** Mesa VA-API drivers on the host (`mesa-va-drivers`). Pass `/dev/dri` to the container.
+- **NVIDIA NVENC:** NVIDIA Container Toolkit installed on the host. Pass `--gpus all` to the container.
+- **Software fallback:** No GPU or drivers required.
 
-Verify QSV availability on the host before deploying:
+Verify hardware encoder availability on the host:
 
 ```bash
+# Intel / AMD (VA-API)
 vainfo
-# Should list VAEntrypointEncSlice for H264 and HEVCMain/HEVCMain10
+# Should list VAEntrypointEncSlice for HEVCMain/HEVCMain10
+
+# NVIDIA
+nvidia-smi
+# Should show your GPU model and driver version
 ```
 
 ---
@@ -58,10 +69,40 @@ A reference template is available at `ref/config.yaml` in the repository.
 
 ## Docker Run
 
+### Intel QSV or AMD VAAPI
+
 ```bash
 docker run -d \
   --name x265transcoder \
   --device /dev/dri:/dev/dri \
+  -p 5000:5000 \
+  -v /path/to/config:/config \
+  -v /path/to/logs:/logs \
+  -v /path/to/shows:/shows \
+  -v /path/to/films:/films \
+  audioe/x265transcoder:latest
+```
+
+### NVIDIA NVENC
+
+```bash
+docker run -d \
+  --name x265transcoder \
+  --gpus all \
+  --device /dev/dri:/dev/dri \
+  -p 5000:5000 \
+  -v /path/to/config:/config \
+  -v /path/to/logs:/logs \
+  -v /path/to/shows:/shows \
+  -v /path/to/films:/films \
+  audioe/x265transcoder:latest
+```
+
+### Software only (no GPU)
+
+```bash
+docker run -d \
+  --name x265transcoder \
   -p 5000:5000 \
   -v /path/to/config:/config \
   -v /path/to/logs:/logs \
@@ -78,7 +119,12 @@ services:
     image: audioe/x265transcoder:latest
     container_name: x265transcoder
     devices:
-      - /dev/dri:/dev/dri
+      - /dev/dri:/dev/dri    # Required for Intel QSV / AMD VAAPI
+    # deploy:                 # Uncomment for NVIDIA NVENC
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - capabilities: [gpu]
     ports:
       - "5000:5000"
     volumes:

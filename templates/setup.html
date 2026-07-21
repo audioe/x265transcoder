@@ -44,6 +44,17 @@
     
         <label for="films_directory">Films Directory:</label>
         <input type="text" id="films_directory" name="films_directory" value="{{ default_films }}" required><br>
+
+        <h2>Encoder</h2>
+        <label for="encoder">Hardware Encoder:</label>
+        <select id="encoder" name="encoder">
+            <option value="auto" {% if current_encoder == 'auto' %}selected{% endif %}>Auto-detect</option>
+            <option value="qsv" {% if current_encoder == 'qsv' %}selected{% endif %}>Intel QSV</option>
+            <option value="vaapi" {% if current_encoder == 'vaapi' %}selected{% endif %}>AMD VAAPI</option>
+            <option value="nvenc" {% if current_encoder == 'nvenc' %}selected{% endif %}>NVIDIA NVENC</option>
+            <option value="software" {% if current_encoder == 'software' %}selected{% endif %}>Software (libx265)</option>
+        </select>
+
         <input type="submit" value="Save Configuration">
     </form>
     </div>

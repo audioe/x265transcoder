@@ -10,6 +10,7 @@ from pymediainfo import MediaInfo
 import logging
 from ffmpeg_progress_yield import FfmpegProgress
 from modules.history import start_job, record_file, complete_job
+from modules.encoder import resolve_encoder, build_ffmpeg_cmd, get_encoder_display_name
 
 if __name__ == '__main__':
     if len(sys.argv) < 3:
@@ -81,6 +82,19 @@ if __name__ == '__main__':
             yaml.dump(data, f, default_flow_style=False)
 
     # MAIN
+    # Detect or resolve encoder from config
+    encoder_config_value = None
+    try:
+        with open('/config/config.yaml', 'r') as f:
+            app_config = yaml.safe_load(f)
+            if app_config:
+                encoder_config_value = app_config.get('encoder', None)
+    except (FileNotFoundError, yaml.YAMLError):
+        pass
+
+    active_encoder = resolve_encoder(encoder_config_value)
+    logging.info(f"Encoder: {get_encoder_display_name(active_encoder)}")
+
     logging.info(f"Starting Script Version {Version}.  Working in {mediafolder}, and looking for {include}")
     if delete == "Yes":
         logging.info("Deleting files is enabled.")
@@ -189,7 +203,7 @@ if __name__ == '__main__':
                 else:
                     outputfile = file_path
 
-                logging.info(f"Transcode config:   Quality={quality}")
+                logging.info(f"Transcode config:   Quality={quality}  Encoder={get_encoder_display_name(active_encoder)}")
                 #if "films" in mediafolder:
                 #    logging.info("We're encoding a film to 10 Bit, will add this to output file name")
                 #    outputfile = outputfile.replace('.mkv', '-10bit.mkv')
@@ -201,29 +215,13 @@ if __name__ == '__main__':
 
                 logging.info("Beginning transcode...")
                 starttime = datetime.now()
-                cmd = [
-                    "/usr/lib/jellyfin-ffmpeg/ffmpeg",
-                    "-i", f"{file_path}_old",
-                    "-pix_fmt", "p010le",
-                    "-map_chapters", "0",
-                    "-metadata", f"title={filetitle}",
-                    "-map", "0:v:0",
-                    "-c:v", "hevc_qsv",
-                    "-profile:v", "main10",
-                    "-preset", "medium",
-                    "-rc_mode", "CQP",
-                    "-global_quality", f"{quality}",
-                    "-look_ahead", "1",
-                    "-look_ahead_depth", "40",
-                    "-adaptive_i", "1",
-                    "-adaptive_b", "1",
-                    "-map", "0:a",
-                    "-c:a", "copy",
-                    "-map", "0:s?",
-                    "-c:s", "copy",
-                    "-stats_period", "15",
-                    outputfile
-                ]
+                cmd = build_ffmpeg_cmd(
+                    input_path=f"{file_path}_old",
+                    output_path=outputfile,
+                    encoder=active_encoder,
+                    quality=quality,
+                    title=filetitle
+                )
 
                 logging.info(f"FFmpeg command: {' '.join(cmd)}")
                 process = FfmpegProgress(cmd)
@@ -325,6 +323,7 @@ if __name__ == '__main__':
                                    failure_reason=jobfailed)
                     else:
                         SuccessfulCount += 1
+                        Successful.append(filetitle)
                         # Record successful file in history
                         category, title, season = derive_metadata(file_path, mediafolder)
                         record_file(history_job_id, file_path, convertedname, "success",
@@ -355,18 +354,18 @@ if __name__ == '__main__':
         # Clear ETA now that the job is complete
         update_progress_yaml("eta", "")
 
+        # Record job completion in history database (before Telegram, in case messaging fails)
+        complete_job(history_job_id, TotalFiles, SuccessfulCount, FailedCount, SkippedCount,
+                     OldFolderSizeBytes, NewFolderSizeBytes)
+
         if FailedCount > 0:
             logging.warning(f"Some Jobs May have Failed: {Failed}")
             logging.info("Sending Telegram Message...")
-            send_telegram_message (f"Transcode Job for {mediafolder} completed with failures.\n\n{SuccessfulCount} Succeeded | {FailedCount} Failed | {SkippedCount} Skipped\n\nThe following files failed verification: {Failed}")
+            send_telegram_message(f"Transcode Job for {mediafolder} completed with failures.\n\n{SuccessfulCount} Succeeded | {FailedCount} Failed | {SkippedCount} Skipped\n\nThe following files failed verification: {Failed}")
         else:
             logging.info(f"All Jobs Succeeded: {Successful}")
             logging.info("Sending Telegram Message...")
-        send_telegram_message (f"Transcode Job for {mediafolder} completed successfully.\n\n{SuccessfulCount} Succeeded | {SkippedCount} Skipped\n\nOriginal Directory Size: {oldfoldersize} GB\nNew Directory Size: {newfoldersize} GB\nSpace Saved: {folderpercdiff}%")
-
-        # Record job completion in history database
-        complete_job(history_job_id, TotalFiles, SuccessfulCount, FailedCount, SkippedCount,
-                     OldFolderSizeBytes, NewFolderSizeBytes)
+            send_telegram_message(f"Transcode Job for {mediafolder} completed successfully.\n\n{SuccessfulCount} Succeeded | {SkippedCount} Skipped\n\nOriginal Directory Size: {oldfoldersize} GB\nNew Directory Size: {newfoldersize} GB\nSpace Saved: {folderpercdiff}%")
 
     logging.info("Done.")
 

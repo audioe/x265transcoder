@@ -16,13 +16,14 @@ A Dockerised web application that batch-transcodes video libraries from H.264 (x
 | `x265transcoder.py` | Background transcode engine; spawned by Flask via `subprocess.Popen` |
 | `modules/scanner.py` | Scheduled media inventory scanner; writes `/config/media.db` (SQLite). Runs nightly at 04:00 via APScheduler |
 | `modules/history.py` | Transcode job history; records per-file results and per-job summaries to `/config/media.db` |
+| `modules/encoder.py` | Hardware encoder detection (QSV/VAAPI/NVENC/software) and FFmpeg command builder |
 | `modules/collector.py` | Legacy media inventory scanner; writes `/config/db.yaml` (dormant — superseded by scanner.py) |
 | `templates/index.html` | Main Jinja2 template — renders all transcoder UI states |
 | `templates/recommendations.html` | Recommendations page — library stats, top x264 films/shows sorted by size |
 | `templates/history.html` | Transcode history page — lifetime stats, job list, per-job file detail drill-down |
 | `templates/setup.html` | Initial configuration setup form |
 | `ref/config.yaml` | Reference config template; live config must be at `/config/config.yaml` |
-| `dockerfile` | Container definition; installs jellyfin-ffmpeg6 and Intel QSV drivers |
+| `dockerfile` | Container definition; installs jellyfin-ffmpeg6, Intel/AMD/NVIDIA GPU drivers |
 
 ## Runtime paths (inside container)
 
@@ -34,7 +35,7 @@ A Dockerised web application that batch-transcodes video libraries from H.264 (x
 
 ## Tech stack
 
-Python 3.14 · Flask · Jinja2 · pymediainfo · ffmpeg-progress-yield · jellyfin-ffmpeg (hevc_qsv) · PyYAML · APScheduler · SQLite · Docker · GitHub Actions
+Python 3.14 · Flask · Jinja2 · pymediainfo · ffmpeg-progress-yield · jellyfin-ffmpeg (hevc_qsv / hevc_vaapi / hevc_nvenc / libx265) · PyYAML · APScheduler · SQLite · Docker · GitHub Actions
 
 ## Documentation index
 
