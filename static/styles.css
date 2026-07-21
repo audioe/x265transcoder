@@ -335,3 +335,97 @@ progress::-moz-progress-bar {
 .container:has(.stats-panel) {
     max-width: 900px;
 }
+
+/* --- Scan Status Panel --- */
+
+.recommendations-container {
+    max-width: 900px;
+}
+
+.scan-status-panel {
+    border-radius: 8px;
+    padding: 20px;
+    margin-bottom: 20px;
+}
+
+.scan-status-panel h3 {
+    margin-top: 0;
+    text-align: left;
+}
+
+.scan-running {
+    background-color: #e8f4fd;
+    border: 1px solid #b8daff;
+}
+
+.scan-complete {
+    background-color: #d4edda;
+    border: 1px solid #c3e6cb;
+}
+
+.scan-failed {
+    background-color: #f8d7da;
+    border: 1px solid #f5c6cb;
+}
+
+.scan-status-details p {
+    margin: 8px 0;
+}
+
+.scan-status-message {
+    font-style: italic;
+    color: #555;
+}
+
+.scan-status-file {
+    font-size: 0.9em;
+    color: #444;
+    word-break: break-all;
+}
+
+.scan-status-count {
+    font-size: 0.95em;
+}
+
+.scan-status-hint {
+    font-size: 0.8em;
+    color: #888;
+    margin-top: 12px;
+}
+
+/* --- Scan History Table --- */
+
+.scan-history-table {
+    font-size: 0.85em;
+}
+
+.scan-row-failed {
+    background-color: #fff5f5;
+}
+
+.scan-row-running {
+    background-color: #f0f7ff;
+}
+
+.status-badge {
+    display: inline-block;
+    padding: 3px 8px;
+    border-radius: 12px;
+    font-size: 0.85em;
+    font-weight: bold;
+}
+
+.status-success {
+    background-color: #d4edda;
+    color: #155724;
+}
+
+.status-failed {
+    background-color: #f8d7da;
+    color: #721c24;
+}
+
+.status-running {
+    background-color: #cce5ff;
+    color: #004085;
+}

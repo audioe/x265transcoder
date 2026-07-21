@@ -3,8 +3,9 @@ import subprocess
 import os
 import yaml
 import logging
+import threading
 from apscheduler.schedulers.background import BackgroundScheduler
-from modules.scanner import run_scan, get_recommendations
+from modules.scanner import run_scan, get_recommendations, get_scan_status, get_scan_history
 
 app = Flask(__name__)
 
@@ -306,19 +307,39 @@ scheduler.start()
 def recommendations():
     load_config()
     data = get_recommendations(limit=50)
-    return render_template('recommendations.html', version=version, config=config, data=data)
+    scan_status = get_scan_status()
+    history = get_scan_history(limit=10)
+    return render_template('recommendations.html', version=version, config=config,
+                           data=data, scan_status=scan_status, scan_history=history)
 
 
 @app.route('/scan_now', methods=['POST'])
 def scan_now():
-    """Trigger an immediate media library scan."""
+    """Trigger an immediate media library scan in a background thread."""
+    scan_status = get_scan_status()
+    if scan_status.get("running"):
+        # Already running — just redirect back
+        return redirect(url_for('recommendations'))
+
     load_config()
     libraries = config.get('libraries', {})
-    try:
-        result = run_scan(libraries)
-        return redirect(url_for('recommendations'))
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
+
+    def _run_in_background():
+        try:
+            run_scan(libraries)
+        except Exception as e:
+            scheduler_logger.error(f"Manual scan failed: {e}")
+
+    thread = threading.Thread(target=_run_in_background, daemon=True)
+    thread.start()
+
+    return redirect(url_for('recommendations'))
+
+
+@app.route('/scan_status')
+def scan_status_endpoint():
+    """JSON endpoint for polling scan progress."""
+    return jsonify(get_scan_status())
 
 
 if __name__ == '__main__':

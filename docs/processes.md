@@ -221,11 +221,14 @@ Note: this endpoint is unauthenticated and should not be exposed on a public net
 **File:** `flaskapp.py → recommendations()`
 
 1. Calls `get_recommendations(limit=50)` from `modules/scanner.py`.
-2. The function queries `/config/media.db`:
+2. Calls `get_scan_status()` for live scan progress (in-memory, thread-safe).
+3. Calls `get_scan_history(limit=10)` for recent scan records from the `scan_history` table.
+4. The recommendations function queries `/config/media.db`:
    - **Films:** `SELECT title, filename, size_bytes, filepath FROM media_files WHERE category='films' AND codec='x264' ORDER BY size_bytes DESC LIMIT 50`
    - **Shows:** `SELECT title, season, COUNT(*) as episode_count, SUM(size_bytes) as total_bytes FROM media_files WHERE category='shows' AND codec='x264' GROUP BY title, season ORDER BY total_bytes DESC LIMIT 50`
    - **Stats:** aggregate counts and sizes for x264 vs x265, plus last scan timestamps.
-3. Renders `templates/recommendations.html` with the data.
+5. Renders `templates/recommendations.html` with recommendations data, scan status, and scan history.
+6. If a scan is currently running, the template includes `<meta http-equiv="refresh" content="3">` for auto-polling.
 
 ---
 
@@ -233,6 +236,30 @@ Note: this endpoint is unauthenticated and should not be exposed on a public net
 
 **File:** `flaskapp.py → scan_now()`
 
-1. Calls `load_config()` to get current library paths.
-2. Calls `run_scan(libraries)` (full or incremental as appropriate).
-3. Redirects to `GET /recommendations` to display updated results.
+1. Checks if a scan is already running via `get_scan_status()`. If so, redirects back without starting a new one.
+2. Calls `load_config()` to get current library paths.
+3. Spawns `run_scan(libraries)` in a background `threading.Thread` (daemon=True) so the HTTP response returns immediately.
+4. Redirects to `GET /recommendations` — the page will show the in-progress status panel and auto-refresh.
+
+---
+
+## 12. Scan Status Polling (GET /scan_status)
+
+**File:** `flaskapp.py → scan_status_endpoint()`
+
+Returns a JSON object with the current scan state:
+
+```json
+{
+    "running": true,
+    "scan_type": "full",
+    "started_at": "2026-07-20T04:00:00+00:00",
+    "current_file": "movie.mkv",
+    "files_processed": 42,
+    "files_total": 200,
+    "phase": "scanning",
+    "message": "Scanning films library..."
+}
+```
+
+Used by the recommendations page meta-refresh (or optionally by JS fetch for finer-grained polling).

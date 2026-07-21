@@ -5,9 +5,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>x265 Transcoder - Recommendations</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+    {% if scan_status.running %}
+    <meta http-equiv="refresh" content="3">
+    {% endif %}
 </head>
 <body>
-    <div class="container">
+    <div class="container recommendations-container">
         <h1>x265 Transcoder</h1>
         <h2>Version {{ version }}</h2>
         <hr>
@@ -15,6 +18,45 @@
         <div class="nav-links">
             <a href="{{ url_for('index') }}">&larr; Back to Transcoder</a>
         </div>
+
+        <!-- Scan Status Panel (shown when scan is running or recently completed) -->
+        {% if scan_status.running %}
+        <div class="scan-status-panel scan-running">
+            <h3>Scan In Progress</h3>
+            <div class="scan-status-details">
+                <p class="scan-status-type">
+                    <strong>Type:</strong> {{ scan_status.scan_type | capitalize }} scan
+                </p>
+                <p class="scan-status-message">{{ scan_status.message }}</p>
+                {% if scan_status.current_file %}
+                <p class="scan-status-file">
+                    <strong>Current file:</strong> {{ scan_status.current_file }}
+                </p>
+                {% endif %}
+                <p class="scan-status-count">
+                    <strong>Files processed:</strong> {{ scan_status.files_processed }}
+                    {% if scan_status.files_total %}
+                     / {{ scan_status.files_total }}
+                    {% endif %}
+                </p>
+                {% if scan_status.files_total and scan_status.files_total > 0 %}
+                <div class="progress-container">
+                    <progress value="{{ scan_status.files_processed }}" max="{{ scan_status.files_total }}"></progress>
+                    <span class="progress-text">{{ ((scan_status.files_processed / scan_status.files_total) * 100) | int }}%</span>
+                </div>
+                {% endif %}
+            </div>
+            <p class="scan-status-hint">This page refreshes automatically every 3 seconds.</p>
+        </div>
+        {% elif scan_status.phase == "complete" %}
+        <div class="scan-status-panel scan-complete">
+            <p>{{ scan_status.message }}</p>
+        </div>
+        {% elif scan_status.phase == "failed" %}
+        <div class="scan-status-panel scan-failed">
+            <p>{{ scan_status.message }}</p>
+        </div>
+        {% endif %}
 
         <!-- Library Statistics -->
         {% if data.stats %}
@@ -49,24 +91,28 @@
 
             <p class="scan-info">
                 {% if data.stats.last_incremental_scan %}
-                    Last scan: {{ data.stats.last_incremental_scan[:19] }}
+                    Last scan: {{ data.stats.last_incremental_scan[:19] | replace("T", " ") }} UTC
                 {% elif data.stats.last_full_scan %}
-                    Last scan: {{ data.stats.last_full_scan[:19] }}
+                    Last scan: {{ data.stats.last_full_scan[:19] | replace("T", " ") }} UTC
                 {% else %}
                     No scan has been run yet.
                 {% endif %}
             </p>
 
+            {% if not scan_status.running %}
             <form method="post" action="{{ url_for('scan_now') }}" class="scan-form">
                 <input type="submit" value="Scan Now" class="btn-scan">
             </form>
+            {% endif %}
         </div>
         {% else %}
         <div class="stats-panel">
             <p>No scan data available. Run a scan to populate recommendations.</p>
+            {% if not scan_status.running %}
             <form method="post" action="{{ url_for('scan_now') }}" class="scan-form">
                 <input type="submit" value="Scan Now" class="btn-scan">
             </form>
+            {% endif %}
         </div>
         {% endif %}
 
@@ -126,6 +172,55 @@
 
         {% if not data.films and not data.shows and data.stats %}
         <p>No x264 content found — your library is fully transcoded.</p>
+        {% endif %}
+
+        <!-- Scan History -->
+        {% if scan_history %}
+        <h3>Scan History</h3>
+        <div class="table-container">
+            <table class="recommendations-table scan-history-table">
+                <thead>
+                    <tr>
+                        <th>Type</th>
+                        <th>Started</th>
+                        <th>Duration</th>
+                        <th>Files</th>
+                        <th>Added/Updated</th>
+                        <th>Removed</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for scan in scan_history %}
+                    <tr class="scan-row-{{ scan.status }}">
+                        <td>{{ scan.scan_type | capitalize }}</td>
+                        <td>{{ scan.started_at[:16] | replace("T", " ") }}</td>
+                        <td>
+                            {% if scan.duration_seconds %}
+                                {{ "%.1f"|format(scan.duration_seconds) }}s
+                            {% else %}
+                                —
+                            {% endif %}
+                        </td>
+                        <td>{{ scan.files_processed }}</td>
+                        <td>{{ scan.files_added }}</td>
+                        <td>{{ scan.files_removed }}</td>
+                        <td>
+                            {% if scan.status == "success" %}
+                                <span class="status-badge status-success">Success</span>
+                            {% elif scan.status == "failed" %}
+                                <span class="status-badge status-failed" title="{{ scan.error_message }}">Failed</span>
+                            {% elif scan.status == "running" %}
+                                <span class="status-badge status-running">Running</span>
+                            {% else %}
+                                {{ scan.status }}
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
         {% endif %}
     </div>
 

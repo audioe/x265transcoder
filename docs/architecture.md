@@ -55,8 +55,9 @@ The web front-end and job dispatcher. Responsibilities:
 - Serves the single-page UI via Jinja2 templates (`templates/index.html`).
 - Reads `/config/config.yaml` at startup for library paths and secrets.
 - Reads `/config/job.yaml` at startup and on every `GET /` request to surface live progress.
-- Provides four HTTP routes plus `/recommendations` and `/scan_now` (see [Logical Processes](processes.md)).
+- Provides four HTTP routes plus `/recommendations`, `/scan_now`, and `/scan_status` (see [Logical Processes](processes.md)).
 - Runs APScheduler with a nightly job (04:00) that triggers `modules/scanner.py` to scan both libraries.
+- Runs manual scans in a background thread to avoid blocking HTTP responses; exposes live scan progress via `GET /scan_status` (JSON).
 - Detects whether a transcode job is already running by scanning the process list for `x265transcoder.py` via `ps aux`.
 - Spawns `x265transcoder.py` as a detached subprocess via `subprocess.Popen`, passing all job parameters as positional CLI arguments.
 - Writes initial `job_progress` and `file_progress` values to `/config/job.yaml` immediately after spawning the child process.
@@ -83,8 +84,11 @@ The scheduled media inventory scanner. Replaces `collector.py` as the active lib
 - Performs a full scan on first run (when `/config/media.db` is absent or empty), walking both libraries and recording every `.mkv` file's codec, size, mtime, title, and season.
 - Performs incremental scans on subsequent runs — only processes files with changed mtime and removes records for deleted files.
 - Stores data in SQLite (`/config/media.db`) with WAL mode for safe concurrent reads from Flask.
+- Tracks live scan progress in thread-safe in-memory state (`get_scan_status()`), including current file, files processed, phase, and status message.
+- Records scan history in the `scan_history` table (type, duration, files processed/added/removed, success/failure).
 - Provides `get_recommendations()` which queries the DB for the largest x264 films (by individual file size) and largest x264 show seasons (by aggregate season size).
-- Triggered nightly at 04:00 via APScheduler, or manually via `POST /scan_now`.
+- Provides `get_scan_history()` for the most recent scan records.
+- Triggered nightly at 04:00 via APScheduler, or manually via `POST /scan_now` (runs in background thread).
 
 ### modules/collector.py
 

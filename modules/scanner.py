@@ -12,12 +12,26 @@ into a SQLite database at /config/media.db.
 import os
 import sqlite3
 import logging
+import threading
 from datetime import datetime, timezone
 from pymediainfo import MediaInfo
 
 DB_PATH = "/config/media.db"
 
 logger = logging.getLogger(__name__)
+
+# --- Live scan status (in-memory, shared across threads) ---
+_scan_status_lock = threading.Lock()
+_scan_status = {
+    "running": False,
+    "scan_type": None,       # "full" or "incremental"
+    "started_at": None,
+    "current_file": None,
+    "files_processed": 0,
+    "files_total": None,     # known for incremental (disk count), estimated for full
+    "phase": None,           # "walking", "scanning", "complete", "failed"
+    "message": None,
+}
 
 
 def _get_connection():
@@ -52,6 +66,19 @@ def _ensure_schema(conn):
         );
 
         INSERT OR IGNORE INTO scan_state (id) VALUES (1);
+
+        CREATE TABLE IF NOT EXISTS scan_history (
+            id INTEGER PRIMARY KEY,
+            scan_type TEXT NOT NULL,
+            started_at TEXT NOT NULL,
+            completed_at TEXT,
+            duration_seconds REAL,
+            files_processed INTEGER DEFAULT 0,
+            files_added INTEGER DEFAULT 0,
+            files_removed INTEGER DEFAULT 0,
+            status TEXT DEFAULT 'running',
+            error_message TEXT
+        );
 
         CREATE INDEX IF NOT EXISTS idx_media_codec ON media_files(codec);
         CREATE INDEX IF NOT EXISTS idx_media_category ON media_files(category);
@@ -125,6 +152,55 @@ def _walk_library(library_root, category):
             yield filepath, filename, size_bytes, mtime, title, season
 
 
+def _update_status(**kwargs):
+    """Thread-safe update of the in-memory scan status."""
+    with _scan_status_lock:
+        _scan_status.update(kwargs)
+
+
+def get_scan_status():
+    """Return a copy of the current scan status (thread-safe)."""
+    with _scan_status_lock:
+        return dict(_scan_status)
+
+
+def _start_scan_history(conn, scan_type, started_at):
+    """Insert a new scan_history row and return its ID."""
+    cursor = conn.execute("""
+        INSERT INTO scan_history (scan_type, started_at, status)
+        VALUES (?, ?, 'running')
+    """, (scan_type, started_at))
+    conn.commit()
+    return cursor.lastrowid
+
+
+def _complete_scan_history(conn, history_id, completed_at, duration, files_processed, files_added, files_removed, status, error_message=None):
+    """Update a scan_history row on completion."""
+    conn.execute("""
+        UPDATE scan_history
+        SET completed_at = ?, duration_seconds = ?, files_processed = ?,
+            files_added = ?, files_removed = ?, status = ?, error_message = ?
+        WHERE id = ?
+    """, (completed_at, duration, files_processed, files_added, files_removed, status, error_message, history_id))
+    conn.commit()
+
+
+def get_scan_history(limit=10):
+    """Return the most recent scan history entries."""
+    if not os.path.exists(DB_PATH):
+        return []
+    conn = _get_connection()
+    rows = conn.execute("""
+        SELECT scan_type, started_at, completed_at, duration_seconds,
+               files_processed, files_added, files_removed, status, error_message
+        FROM scan_history
+        ORDER BY id DESC
+        LIMIT ?
+    """, (limit,)).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
 def full_scan(libraries):
     """
     Perform a full scan of all configured libraries.
@@ -132,44 +208,72 @@ def full_scan(libraries):
     Args:
         libraries: dict with keys 'films' and 'shows' mapping to directory paths.
     """
+    import time
     logger.info("Starting full media scan...")
-    conn = _get_connection()
+    start_time = time.time()
     now = datetime.now(timezone.utc).isoformat()
 
-    # Clear existing data for a clean full scan
-    conn.execute("DELETE FROM media_files")
-    conn.commit()
+    _update_status(running=True, scan_type="full", started_at=now,
+                   current_file=None, files_processed=0, files_total=None,
+                   phase="walking", message="Discovering files...")
 
-    count = 0
-    for category, library_root in libraries.items():
-        if not library_root or not os.path.isdir(library_root):
-            logger.warning(f"Library path not accessible: {category}={library_root}")
-            continue
+    conn = _get_connection()
+    history_id = _start_scan_history(conn, "full", now)
 
-        for filepath, filename, size_bytes, mtime, title, season in _walk_library(library_root, category):
-            raw_codec = _get_video_codec(filepath)
-            codec = _normalise_codec(raw_codec)
+    try:
+        # Clear existing data for a clean full scan
+        conn.execute("DELETE FROM media_files")
+        conn.commit()
 
-            conn.execute("""
-                INSERT OR REPLACE INTO media_files
-                    (category, title, season, filepath, filename, size_bytes, codec, mtime, scanned_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """, (category, title, season, filepath, filename, size_bytes, codec, mtime, now))
-            count += 1
+        count = 0
+        for category, library_root in libraries.items():
+            if not library_root or not os.path.isdir(library_root):
+                logger.warning(f"Library path not accessible: {category}={library_root}")
+                continue
 
-            # Commit in batches to avoid holding large transactions
-            if count % 100 == 0:
-                conn.commit()
+            _update_status(phase="scanning", message=f"Scanning {category} library...")
 
-    conn.commit()
+            for filepath, filename, size_bytes, mtime, title, season in _walk_library(library_root, category):
+                raw_codec = _get_video_codec(filepath)
+                codec = _normalise_codec(raw_codec)
 
-    # Update scan state
-    conn.execute("UPDATE scan_state SET last_full_scan = ? WHERE id = 1", (now,))
-    conn.commit()
-    conn.close()
+                conn.execute("""
+                    INSERT OR REPLACE INTO media_files
+                        (category, title, season, filepath, filename, size_bytes, codec, mtime, scanned_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """, (category, title, season, filepath, filename, size_bytes, codec, mtime, now))
+                count += 1
 
-    logger.info(f"Full scan complete. {count} files indexed.")
-    return count
+                _update_status(current_file=filename, files_processed=count)
+
+                # Commit in batches to avoid holding large transactions
+                if count % 100 == 0:
+                    conn.commit()
+
+        conn.commit()
+
+        # Update scan state
+        conn.execute("UPDATE scan_state SET last_full_scan = ? WHERE id = 1", (now,))
+        conn.commit()
+
+        duration = time.time() - start_time
+        completed_at = datetime.now(timezone.utc).isoformat()
+        _complete_scan_history(conn, history_id, completed_at, duration, count, count, 0, "success")
+        _update_status(running=False, phase="complete", files_processed=count,
+                       message=f"Full scan complete. {count} files indexed in {duration:.1f}s.")
+
+        logger.info(f"Full scan complete. {count} files indexed in {duration:.1f}s.")
+        return count
+
+    except Exception as e:
+        duration = time.time() - start_time
+        completed_at = datetime.now(timezone.utc).isoformat()
+        _complete_scan_history(conn, history_id, completed_at, duration, 0, 0, 0, "failed", str(e))
+        _update_status(running=False, phase="failed", message=f"Scan failed: {e}")
+        logger.error(f"Full scan failed: {e}")
+        raise
+    finally:
+        conn.close()
 
 
 def incremental_scan(libraries):
@@ -179,63 +283,95 @@ def incremental_scan(libraries):
     Args:
         libraries: dict with keys 'films' and 'shows' mapping to directory paths.
     """
+    import time
     logger.info("Starting incremental media scan...")
-    conn = _get_connection()
+    start_time = time.time()
     now = datetime.now(timezone.utc).isoformat()
 
-    # Build a set of all current filepaths on disk, and their mtimes
-    disk_files = {}  # filepath -> (filename, size_bytes, mtime, title, season, category)
-    for category, library_root in libraries.items():
-        if not library_root or not os.path.isdir(library_root):
-            logger.warning(f"Library path not accessible: {category}={library_root}")
-            continue
-        for filepath, filename, size_bytes, mtime, title, season in _walk_library(library_root, category):
-            disk_files[filepath] = (filename, size_bytes, mtime, title, season, category)
+    _update_status(running=True, scan_type="incremental", started_at=now,
+                   current_file=None, files_processed=0, files_total=None,
+                   phase="walking", message="Discovering files on disk...")
 
-    # Get all currently indexed filepaths and their mtimes from the DB
-    db_rows = conn.execute("SELECT filepath, mtime FROM media_files").fetchall()
-    db_files = {row["filepath"]: row["mtime"] for row in db_rows}
+    conn = _get_connection()
+    history_id = _start_scan_history(conn, "incremental", now)
 
-    # 1. Remove records for files that no longer exist
-    deleted = set(db_files.keys()) - set(disk_files.keys())
-    if deleted:
-        conn.executemany(
-            "DELETE FROM media_files WHERE filepath = ?",
-            [(fp,) for fp in deleted]
-        )
-        logger.info(f"Removed {len(deleted)} deleted file(s) from database.")
+    try:
+        # Build a set of all current filepaths on disk, and their mtimes
+        disk_files = {}  # filepath -> (filename, size_bytes, mtime, title, season, category)
+        for category, library_root in libraries.items():
+            if not library_root or not os.path.isdir(library_root):
+                logger.warning(f"Library path not accessible: {category}={library_root}")
+                continue
+            for filepath, filename, size_bytes, mtime, title, season in _walk_library(library_root, category):
+                disk_files[filepath] = (filename, size_bytes, mtime, title, season, category)
 
-    # 2. Add or update files that are new or have changed mtime
-    updated_count = 0
-    for filepath, (filename, size_bytes, mtime, title, season, category) in disk_files.items():
-        existing_mtime = db_files.get(filepath)
-        if existing_mtime is not None and abs(existing_mtime - mtime) < 0.001:
-            # File unchanged — skip
-            continue
+        _update_status(files_total=len(disk_files), phase="scanning",
+                       message=f"Comparing {len(disk_files)} files against database...")
 
-        # File is new or modified — scan codec
-        raw_codec = _get_video_codec(filepath)
-        codec = _normalise_codec(raw_codec)
+        # Get all currently indexed filepaths and their mtimes from the DB
+        db_rows = conn.execute("SELECT filepath, mtime FROM media_files").fetchall()
+        db_files = {row["filepath"]: row["mtime"] for row in db_rows}
 
-        conn.execute("""
-            INSERT OR REPLACE INTO media_files
-                (category, title, season, filepath, filename, size_bytes, codec, mtime, scanned_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """, (category, title, season, filepath, filename, size_bytes, codec, mtime, now))
-        updated_count += 1
+        # 1. Remove records for files that no longer exist
+        deleted = set(db_files.keys()) - set(disk_files.keys())
+        if deleted:
+            conn.executemany(
+                "DELETE FROM media_files WHERE filepath = ?",
+                [(fp,) for fp in deleted]
+            )
+            logger.info(f"Removed {len(deleted)} deleted file(s) from database.")
 
-        if updated_count % 100 == 0:
-            conn.commit()
+        # 2. Add or update files that are new or have changed mtime
+        updated_count = 0
+        files_checked = 0
+        for filepath, (filename, size_bytes, mtime, title, season, category) in disk_files.items():
+            files_checked += 1
+            existing_mtime = db_files.get(filepath)
+            if existing_mtime is not None and abs(existing_mtime - mtime) < 0.001:
+                # File unchanged — skip
+                continue
 
-    conn.commit()
+            # File is new or modified — scan codec
+            raw_codec = _get_video_codec(filepath)
+            codec = _normalise_codec(raw_codec)
 
-    # Update scan state
-    conn.execute("UPDATE scan_state SET last_incremental_scan = ? WHERE id = 1", (now,))
-    conn.commit()
-    conn.close()
+            conn.execute("""
+                INSERT OR REPLACE INTO media_files
+                    (category, title, season, filepath, filename, size_bytes, codec, mtime, scanned_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (category, title, season, filepath, filename, size_bytes, codec, mtime, now))
+            updated_count += 1
 
-    logger.info(f"Incremental scan complete. {updated_count} file(s) added/updated, {len(deleted)} removed.")
-    return updated_count, len(deleted)
+            _update_status(current_file=filename, files_processed=files_checked)
+
+            if updated_count % 100 == 0:
+                conn.commit()
+
+        conn.commit()
+
+        # Update scan state
+        conn.execute("UPDATE scan_state SET last_incremental_scan = ? WHERE id = 1", (now,))
+        conn.commit()
+
+        duration = time.time() - start_time
+        completed_at = datetime.now(timezone.utc).isoformat()
+        _complete_scan_history(conn, history_id, completed_at, duration,
+                              files_checked, updated_count, len(deleted), "success")
+        _update_status(running=False, phase="complete", files_processed=files_checked,
+                       message=f"Incremental scan complete. {updated_count} added/updated, {len(deleted)} removed in {duration:.1f}s.")
+
+        logger.info(f"Incremental scan complete. {updated_count} file(s) added/updated, {len(deleted)} removed in {duration:.1f}s.")
+        return updated_count, len(deleted)
+
+    except Exception as e:
+        duration = time.time() - start_time
+        completed_at = datetime.now(timezone.utc).isoformat()
+        _complete_scan_history(conn, history_id, completed_at, duration, 0, 0, 0, "failed", str(e))
+        _update_status(running=False, phase="failed", message=f"Scan failed: {e}")
+        logger.error(f"Incremental scan failed: {e}")
+        raise
+    finally:
+        conn.close()
 
 
 def run_scan(libraries):
