@@ -229,8 +229,9 @@ if __name__ == '__main__':
                 process = FfmpegProgress(cmd)
                 
                 for file_progress_percentage in process.run_command_with_progress():
+                    file_progress_rounded = round(file_progress_percentage)
                     logging.debug(f"File Progress: {file_progress_percentage}%")
-                    update_progress_yaml("file_progress", file_progress_percentage)
+                    update_progress_yaml("file_progress", file_progress_rounded)
 
                     if progress_percentage == 0:
                         job_progress_percentage = round(((progress_percentage_next_step - progress_percentage)/100) * file_progress_percentage)
