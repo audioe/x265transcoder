@@ -1,6 +1,7 @@
 from flask import Flask, render_template, request, jsonify, redirect, url_for
 import subprocess
 import os
+import shutil
 import yaml
 import logging
 import threading
@@ -333,6 +334,99 @@ def run_from_recommendations():
     update_progress_yaml("file_progress", 0)
 
     return redirect(url_for('index'))
+
+
+# Function to clean up partially completed transcode files in a directory
+def cleanup_interrupted_transcodes(directory):
+    """
+    Restore _old files and remove partial x265 outputs.
+    
+    When a transcode is interrupted:
+    - Original file was renamed: movie.mkv -> movie.mkv_old
+    - Partial output may exist: movie.mkv (or movie_x265.mkv if name contained "264")
+    
+    This function:
+    1. Finds all *_old files
+    2. Determines what the output filename would have been
+    3. Deletes the partial output (if it exists)
+    4. Renames the _old file back to its original name
+    
+    Returns a count of files restored.
+    """
+    restored = 0
+    for dirpath, _, filenames in os.walk(directory):
+        for filename in filenames:
+            if not filename.endswith("_old"):
+                continue
+
+            old_filepath = os.path.join(dirpath, filename)
+            # Original filename is the _old file without the _old suffix
+            original_filename = filename[:-4]  # strip "_old"
+            original_filepath = os.path.join(dirpath, original_filename)
+
+            # Determine what the output file would have been called
+            if "264" in original_filename:
+                output_filename = original_filename.replace('264', '265')
+            else:
+                output_filename = original_filename
+            output_filepath = os.path.join(dirpath, output_filename)
+
+            # Delete the partial output file if it exists
+            if os.path.exists(output_filepath) and output_filepath != original_filepath:
+                try:
+                    os.remove(output_filepath)
+                except OSError:
+                    pass
+
+            # Also delete the original path if it exists and is different from _old
+            # (this handles the case where output_filename == original_filename)
+            if output_filename == original_filename and os.path.exists(original_filepath):
+                try:
+                    os.remove(original_filepath)
+                except OSError:
+                    pass
+
+            # Rename _old file back to original name
+            try:
+                shutil.move(old_filepath, original_filepath)
+                restored += 1
+            except OSError:
+                pass
+
+    return restored
+
+
+# Route to restart a previously interrupted job (with cleanup)
+@app.route("/restart_job", methods=["POST"])
+def restart_job():
+    load_config()
+    # Check if a job is already running
+    if transcode_check('x265transcoder.py'):
+        return redirect(url_for('index'))
+
+    folder = str(request.form['folder'])
+    include = request.form.get('include', '.mkv')
+    quality = request.form.get('quality', '23')
+    delete = request.form.get('delete', 'Yes')
+
+    # Clean up any partially transcoded files first
+    restored_count = cleanup_interrupted_transcodes(folder)
+
+    # Get Telegram secrets
+    telegram_token = get_secret("TELEGRAM_TOKEN")
+    telegram_chatid = get_secret("TELEGRAM_CHATID")
+
+    # Store the job data
+    store_job(folder)
+
+    # Launch the transcoder
+    subprocess.Popen(['python', 'x265transcoder.py', folder, include, quality, delete,
+                      str(telegram_token), str(telegram_chatid), version])
+    update_progress_yaml("job_progress", 0)
+    update_progress_yaml("file_progress", 0)
+
+    return redirect(url_for('index'))
+
     
 # --- Scheduled Scanner ---
 

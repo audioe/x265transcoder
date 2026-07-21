@@ -89,7 +89,7 @@
         <div class="restart-panel">
             <h4>Restart Previous Job</h4>
             <p>Last job directory: <strong>{{ last_job_directory.split('/')[-1] }}</strong></p>
-            <form method="post" action="{{ url_for('run_from_recommendations') }}" class="transcode-options-form">
+            <form method="post" action="{{ url_for('restart_job') }}" class="transcode-options-form">
                 <input type="hidden" name="folder" value="{{ last_job_directory }}">
                 <div class="options-inline">
                     <div class="option-group">
@@ -109,7 +109,7 @@
                     </div>
                 </div>
             </form>
-            <p class="restart-note">The transcoder skips files already in x265, so re-running a partially completed job will only process remaining files.</p>
+            <p class="restart-note">This will clean up any partially transcoded files (restore originals, remove incomplete outputs) then re-run the job from scratch on remaining x264 files.</p>
         </div>
         {% endif %}
 

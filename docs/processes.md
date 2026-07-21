@@ -319,3 +319,44 @@ After each file in the transcode loop, `record_file()` is called with one of thr
 1. Calls `get_job_history()` to get the job list (for context).
 2. Calls `get_job_files(job_id)` for per-file detail of the selected job.
 3. Renders `templates/history.html` with the detail panel expanded, showing per-file results (filename, status, original/new size, space saved, duration).
+
+---
+
+## 16. Restart Job with Cleanup (POST /restart_job)
+
+**File:** `flaskapp.py → restart_job()`, `cleanup_interrupted_transcodes()`
+
+Handles the case where a transcode job was interrupted (container killed, crash, etc.) and partially processed files remain on disk.
+
+### 16a. Cleanup Phase (`cleanup_interrupted_transcodes(directory)`)
+
+1. Walks the target directory tree looking for files ending in `_old`.
+2. For each `*_old` file found:
+   - Determines the original filename by stripping the `_old` suffix.
+   - Determines the expected output filename (if original contained "264", the output would have "265" substituted; otherwise output = original name).
+   - Deletes the partial/incomplete output file if it exists on disk.
+   - Renames the `_old` file back to its original name.
+3. Returns the count of files restored.
+
+### 16b. Job Launch
+
+1. Checks if a transcode job is already running. If so, redirects back.
+2. Reads form fields: `folder`, `quality`, `delete`.
+3. Calls `cleanup_interrupted_transcodes(folder)` to restore any interrupted files.
+4. Fetches Telegram credentials and calls `store_job()`.
+5. Spawns `x265transcoder.py` and resets progress counters.
+6. Redirects to `GET /` to display progress.
+
+### File State Diagram
+
+```
+Interrupted state:
+  movie.mkv_old     (original x264 — intact)
+  movie.mkv         (partial x265 — incomplete)
+
+After cleanup:
+  movie.mkv         (original x264 — restored from _old)
+
+Transcoder runs:
+  Detects x264 codec → processes normally
+```
