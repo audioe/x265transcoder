@@ -84,6 +84,35 @@
         </div>
         {% endif %}
 
+        <!-- Restart last job (shown if there's a previous job directory and no job running) -->
+        {% if last_job_directory %}
+        <div class="restart-panel">
+            <h4>Restart Previous Job</h4>
+            <p>Last job directory: <strong>{{ last_job_directory.split('/')[-1] }}</strong></p>
+            <form method="post" action="{{ url_for('run_from_recommendations') }}" class="transcode-options-form">
+                <input type="hidden" name="folder" value="{{ last_job_directory }}">
+                <div class="options-inline">
+                    <div class="option-group">
+                        <label>Quality (CQP):</label>
+                        <input type="range" name="quality" min="18" max="25" step="1" value="23" oninput="this.nextElementSibling.textContent=this.value">
+                        <span>23</span>
+                    </div>
+                    <div class="option-group">
+                        <label>Delete originals:</label>
+                        <select name="delete">
+                            <option value="Yes" selected>Yes</option>
+                            <option value="No">No</option>
+                        </select>
+                    </div>
+                    <div class="option-group">
+                        <input type="submit" value="Restart" class="btn-transcode-confirm">
+                    </div>
+                </div>
+            </form>
+            <p class="restart-note">The transcoder skips files already in x265, so re-running a partially completed job will only process remaining files.</p>
+        </div>
+        {% endif %}
+
         <!-- Library type selection form -->
         <div class="transcode-section">
             <h3>Start a Transcode Job</h3>

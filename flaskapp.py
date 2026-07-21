@@ -176,12 +176,23 @@ def index():
     # Get library summary stats for the dashboard (when idle)
     dashboard_stats = get_recommendations(limit=0).get('stats', {}) if not transcoder_status else {}
 
+    # Get last job directory for restart capability (when idle)
+    last_job_directory = ''
+    if not transcoder_status and os.path.exists('/config/job.yaml'):
+        try:
+            with open('/config/job.yaml', 'r') as f:
+                last_job_config = yaml.safe_load(f)
+                if last_job_config:
+                    last_job_directory = last_job_config.get('job_directory', '')
+        except:
+            pass
+
     return render_template('index.html', version=version, os=os, config=config,
                            transcoder_status=transcoder_status, job_directory=job_directory,
                            job_progress=job_progress, file_progress=file_progress,
                            current_file_number=current_file_number, current_file=current_file,
                            total_files=total_files, dashboard_stats=dashboard_stats,
-                           active_page='home')
+                           last_job_directory=last_job_directory, active_page='home')
 
 @app.route('/setup', methods=['GET', 'POST'])
 def setup():

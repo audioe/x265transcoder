@@ -142,9 +142,31 @@
                         <td>{{ film.filename }}</td>
                         <td data-bytes="{{ film.size_bytes }}">{{ "%.2f"|format(film.size_bytes / (1024**3)) }} GB</td>
                         <td>
-                            <form method="post" action="{{ url_for('run_from_recommendations') }}" class="inline-form">
+                            <button type="button" class="btn-transcode" onclick="showOptions('film-{{ loop.index }}')" {% if transcoder_running %}disabled{% endif %}>Transcode</button>
+                        </td>
+                    </tr>
+                    <tr class="options-row" id="film-{{ loop.index }}" style="display: none;">
+                        <td colspan="4">
+                            <form method="post" action="{{ url_for('run_from_recommendations') }}" class="transcode-options-form">
                                 <input type="hidden" name="folder" value="{{ film.directory }}">
-                                <input type="submit" value="Transcode" class="btn-transcode" {% if transcoder_running %}disabled{% endif %}>
+                                <div class="options-inline">
+                                    <div class="option-group">
+                                        <label>Quality (CQP):</label>
+                                        <input type="range" name="quality" min="18" max="25" step="1" value="23" oninput="this.nextElementSibling.textContent=this.value">
+                                        <span>23</span>
+                                    </div>
+                                    <div class="option-group">
+                                        <label>Delete originals:</label>
+                                        <select name="delete">
+                                            <option value="Yes" selected>Yes</option>
+                                            <option value="No">No</option>
+                                        </select>
+                                    </div>
+                                    <div class="option-group">
+                                        <input type="submit" value="Start" class="btn-transcode-confirm">
+                                        <button type="button" class="btn-cancel" onclick="hideOptions('film-{{ loop.index }}')">Cancel</button>
+                                    </div>
+                                </div>
                             </form>
                         </td>
                     </tr>
@@ -185,9 +207,31 @@
                         </td>
                         <td data-bytes="{{ show.total_bytes }}">{{ "%.2f"|format(show.total_bytes / (1024**3)) }} GB</td>
                         <td>
-                            <form method="post" action="{{ url_for('run_from_recommendations') }}" class="inline-form">
+                            <button type="button" class="btn-transcode" onclick="showOptions('show-{{ loop.index }}')" {% if transcoder_running %}disabled{% endif %}>Transcode</button>
+                        </td>
+                    </tr>
+                    <tr class="options-row" id="show-{{ loop.index }}" style="display: none;">
+                        <td colspan="6">
+                            <form method="post" action="{{ url_for('run_from_recommendations') }}" class="transcode-options-form">
                                 <input type="hidden" name="folder" value="{{ show.directory }}">
-                                <input type="submit" value="Transcode" class="btn-transcode" {% if transcoder_running %}disabled{% endif %}>
+                                <div class="options-inline">
+                                    <div class="option-group">
+                                        <label>Quality (CQP):</label>
+                                        <input type="range" name="quality" min="18" max="25" step="1" value="23" oninput="this.nextElementSibling.textContent=this.value">
+                                        <span>23</span>
+                                    </div>
+                                    <div class="option-group">
+                                        <label>Delete originals:</label>
+                                        <select name="delete">
+                                            <option value="Yes" selected>Yes</option>
+                                            <option value="No">No</option>
+                                        </select>
+                                    </div>
+                                    <div class="option-group">
+                                        <input type="submit" value="Start" class="btn-transcode-confirm">
+                                        <button type="button" class="btn-cancel" onclick="hideOptions('show-{{ loop.index }}')">Cancel</button>
+                                    </div>
+                                </div>
                             </form>
                         </td>
                     </tr>
@@ -252,6 +296,14 @@
     </div>
 
     <script>
+        // Show/hide transcode options row
+        function showOptions(id) {
+            document.getElementById(id).style.display = 'table-row';
+        }
+        function hideOptions(id) {
+            document.getElementById(id).style.display = 'none';
+        }
+
         // Simple client-side table sorting
         const sortState = {};
 
