@@ -44,7 +44,7 @@ Before making changes, check `docs/issue-log.md` for relevant open issues. Key o
 - The container image is `audioe/x265transcoder`. Tags: `latest` (main branch), `dev` (dev branch).
 - GitHub Actions workflows in `.github/workflows/` build and push automatically on branch push.
 - The `dev` workflow appends `_dev` to `version.txt` before building — do not commit that change back.
-- Increment `version.txt` manually when releasing. No automated versioning tooling is configured.
+- Versioning uses CalVer: `YYYY.MM.patch`. The patch resets to 0 on a new month. A Kiro hook (`auto-version-bump`) auto-increments `version.txt` at session end if changes were made. Do NOT manually edit `version.txt` unless resetting the scheme.
 - The container requires `/dev/dri` passed through for Intel QSV. See `docs/deployment.md` for full hardware and volume requirements.
 
 ## Logging

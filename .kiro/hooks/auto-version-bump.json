@@ -1,0 +1,14 @@
+{
+  "version": "v1",
+  "hooks": [
+    {
+      "name": "Auto Version Bump (CalVer)",
+      "trigger": "Stop",
+      "description": "Auto-bumps version.txt using CalVer (YYYY.MM.patch) at session end if changes were made.",
+      "action": {
+        "type": "command",
+        "command": "python scripts/bump_version.py"
+      }
+    }
+  ]
+}
