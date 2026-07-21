@@ -284,12 +284,13 @@ if __name__ == '__main__':
                     logging.info("Confirmed new file is smaller than original")
                     #newfileduration = subprocess.check_output(['mediainfo', '--Inform=General;%Duration%', outputfile]).decode().strip()
                     newfileduration = get_video_duration(outputfile)
-                    if (int(newfileduration) <= int(fileduration) - 50) or (int(newfileduration) >= int(fileduration) + 50):
+                    duration_tolerance = int(fileduration) * 0.00015  # 0.015% of original duration
+                    if (int(newfileduration) <= int(fileduration) - duration_tolerance) or (int(newfileduration) >= int(fileduration) + duration_tolerance):
                         logging.error("ERROR: New file duration does not match original file Duration!")
                         logging.warning(f"New file Duration: {(newfileduration/60000):.2f} min ({newfileduration}) |  Original file Duration: {(fileduration/60000):.2f} min ({fileduration})")
                         jobfailed = filetitle
                     else:
-                        logging.info("Confirmed file durations match")
+                        logging.info(f"Confirmed file durations match (tolerance: {duration_tolerance:.0f}ms / 0.015%)")
 
                     #newfileframecount = subprocess.check_output(['mediainfo', '--Inform=Video;%FrameCount%', outputfile]).decode().strip()
                     newfileframecount = get_frame_count(outputfile)

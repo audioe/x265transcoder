@@ -202,6 +202,24 @@ When the background scan thread held a write lock on `/config/media.db`, any con
 
 ---
 
+### ISS-015 — Duration validation uses fixed ±50ms tolerance causing false failures
+**Type:** Bug  
+**Severity:** Medium  
+**Files:** `x265transcoder.py`  
+**Resolved:** 2026-07-21
+
+The post-transcode duration check compared original and new file durations with a hard-coded ±50ms tolerance. For long files (e.g. 164 minutes), container remuxing and codec timestamp rounding routinely introduce ~1 second of drift in the duration metadata reported by `pymediainfo`. This caused valid transcodes to be flagged as failures despite the frame count check passing and the file playing back correctly.
+
+**Example:** The Dark Knight Rises (164.56 min) showed a 969ms duration difference — well within acceptable limits but 19× the old 50ms threshold.
+
+**Fix applied:**
+- Replaced the fixed ±50ms tolerance with a percentage-based tolerance of 0.015% of the original file duration.
+- For a 164-minute file this gives ~1,481ms of headroom; for a 30-minute episode ~270ms.
+- This aligns with the frame count check which already uses a percentage-based approach (0.11%).
+- Success log message now reports the calculated tolerance for transparency.
+
+---
+
 ## Improvement Backlog
 
 | ID | Description | Priority |
