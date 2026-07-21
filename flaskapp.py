@@ -493,6 +493,29 @@ def scan_status_endpoint():
     return jsonify(get_scan_status())
 
 
+@app.route('/job_status')
+def job_status_endpoint():
+    """JSON endpoint for polling transcode job progress."""
+    transcoder_status = transcode_check('x265transcoder.py')
+    result = {'running': transcoder_status}
+    if transcoder_status:
+        try:
+            with open('/config/job.yaml', 'r') as f:
+                job_config = yaml.safe_load(f)
+            if job_config is None:
+                job_config = {}
+            result['job_directory'] = job_config.get('job_directory', '')
+            result['job_progress'] = job_config.get('job_progress', '0')
+            result['file_progress'] = job_config.get('file_progress', '0')
+            result['current_file'] = job_config.get('current_file', '')
+            result['current_file_number'] = job_config.get('current_file_number', '')
+            result['total_files'] = job_config.get('total_files', '')
+            result['eta'] = job_config.get('eta', '')
+        except Exception:
+            pass
+    return jsonify(result)
+
+
 # --- Transcode History Routes ---
 
 @app.route('/history')

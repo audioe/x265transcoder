@@ -23,8 +23,9 @@ This document describes the step-by-step flow of every major operation in the ap
 1. Calls `transcode_check('x265transcoder.py')` which runs `ps aux` and scans output for the keyword.
 2. **If a job is running:**
    - Reads `/config/job.yaml` to get `job_directory`, `job_progress`, `file_progress`, `current_file`, `current_file_number`, `total_files`, `eta`.
-   - Renders `index.html` in the "in progress" state, which injects a `<meta http-equiv="refresh" content="5">` tag to auto-reload every 5 seconds.
-   - If `eta` is non-empty, displays the estimated time remaining for the current file below the progress bars.
+   - Renders `index.html` in the "in progress" state. The page uses AJAX polling (`fetch('/job_status')` every 4 seconds) to update progress values in-place without a full page reload.
+   - If `eta` is non-empty, displays the estimated time remaining for the current file in the progress meta grid.
+   - When the job finishes (detected via the `/job_status` response), the page does a single reload to show the idle state.
 3. **If no job is running:**
    - Renders `index.html` with the library-type selector form.
 
@@ -283,7 +284,30 @@ Used by the recommendations page meta-refresh (or optionally by JS fetch for fin
 
 ---
 
-## 14. Transcode History Recording (modules/history.py)
+## 14. Job Status Polling (GET /job_status)
+
+**File:** `flaskapp.py → job_status_endpoint()`
+
+Returns a JSON object with the current transcode job state. Used by the index page's AJAX polling to update progress without full page reloads.
+
+```json
+{
+    "running": true,
+    "job_directory": "/films/hd/Interstellar",
+    "job_progress": "45",
+    "file_progress": "72",
+    "current_file": "Interstellar.mkv",
+    "current_file_number": "1",
+    "total_files": "1",
+    "eta": "32m"
+}
+```
+
+When `running` is `false`, the client reloads the page to render the idle state.
+
+---
+
+## 15. Transcode History Recording (modules/history.py)
 
 **Trigger:** Called by `x265transcoder.py` during job execution.
 

@@ -55,9 +55,10 @@ The web front-end and job dispatcher. Responsibilities:
 - Serves the single-page UI via Jinja2 templates (`templates/index.html`).
 - Reads `/config/config.yaml` at startup for library paths and secrets.
 - Reads `/config/job.yaml` at startup and on every `GET /` request to surface live progress.
-- Provides four HTTP routes plus `/recommendations`, `/scan_now`, and `/scan_status` (see [Logical Processes](processes.md)).
+- Provides four HTTP routes plus `/recommendations`, `/scan_now`, `/scan_status`, and `/job_status` (see [Logical Processes](processes.md)).
 - Runs APScheduler with a nightly job (04:00) that triggers `modules/scanner.py` to scan both libraries.
 - Runs manual scans in a background thread to avoid blocking HTTP responses; exposes live scan progress via `GET /scan_status` (JSON).
+- Exposes live transcode job progress via `GET /job_status` (JSON), consumed by AJAX polling on the index page.
 - Detects whether a transcode job is already running by scanning the process list for `x265transcoder.py` via `ps aux`.
 - Spawns `x265transcoder.py` as a detached subprocess via `subprocess.Popen`, passing all job parameters as positional CLI arguments.
 - Writes initial `job_progress` and `file_progress` values to `/config/job.yaml` immediately after spawning the child process.

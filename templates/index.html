@@ -7,9 +7,6 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
-    {% if transcoder_status == True %}
-    <meta http-equiv="refresh" content="5">
-    {% endif %}
 </head>
 <body>
     <!-- Navigation -->
@@ -28,43 +25,65 @@
 
         <!-- Job In Progress -->
         {% if transcoder_status == True %}
-        <div class="progress-panel">
-            <h3>Transcode In Progress</h3>
-            <p class="progress-directory">
-                {% if job_directory and "films" in job_directory %}
-                    <strong>Film:</strong>
+        <div class="progress-panel" id="progress-panel">
+            <div class="progress-header">
+                <h3>Transcode In Progress</h3>
+                <span class="progress-status-indicator" id="status-indicator">Live</span>
+            </div>
+
+            <div class="progress-meta" id="progress-meta">
+                <div class="progress-meta-item">
+                    <span class="meta-label">Target</span>
+                    <span class="meta-value" id="meta-directory">{{ job_directory.split('/')[-1] if job_directory else 'Unknown' }}</span>
+                </div>
+                <div class="progress-meta-item">
+                    <span class="meta-label">Type</span>
+                    <span class="meta-value">{% if job_directory and "films" in job_directory %}Film{% else %}Show{% endif %}</span>
+                </div>
+                <div class="progress-meta-item">
+                    <span class="meta-label">File</span>
+                    <span class="meta-value" id="meta-file-counter">
+                        {% if current_file_number and total_files %}{{ current_file_number }} of {{ total_files }}{% else %}—{% endif %}
+                    </span>
+                </div>
+                <div class="progress-meta-item">
+                    <span class="meta-label">ETA</span>
+                    <span class="meta-value meta-eta" id="meta-eta">{{ eta if eta else '—' }}</span>
+                </div>
+            </div>
+
+            <div class="progress-current-file" id="current-file-display">
+                {% if current_file and "Loading" not in current_file %}
+                <span class="current-file-label">Now transcoding:</span>
+                <span class="current-file-name" id="current-file-name">{{ current_file }}</span>
                 {% else %}
-                    <strong>Show:</strong>
+                <span class="current-file-label progress-loading">Waiting for transcode to begin...</span>
                 {% endif %}
-                {{ job_directory.split('/')[-1] if job_directory else 'Unknown' }}
-            </p>
-
-            {% if current_file and "Loading" not in current_file %}
-            <p class="progress-file-info">
-                Working on <strong>{{ current_file }}</strong>
-                {% if current_file_number and total_files %}
-                    (file {{ current_file_number }} of {{ total_files }})
-                {% endif %}
-            </p>
-
-            <label for="file-progress">File Progress</label>
-            <div class="progress-container">
-                <progress id="file-progress" value="{{ file_progress }}" max="100"></progress>
-                <span class="progress-text">{{ file_progress }}%</span>
             </div>
 
-            <label for="job-progress">Overall Job Progress</label>
-            <div class="progress-container">
-                <progress id="job-progress" value="{{ job_progress }}" max="100"></progress>
-                <span class="progress-text">{{ job_progress }}%</span>
-            </div>
+            <div class="progress-bars" id="progress-bars">
+                {% if current_file and "Loading" not in current_file %}
+                <div class="progress-bar-group">
+                    <div class="progress-bar-header">
+                        <span class="progress-bar-label">File Progress</span>
+                        <span class="progress-bar-pct" id="file-pct">{{ file_progress }}%</span>
+                    </div>
+                    <div class="progress-bar-track">
+                        <div class="progress-bar-fill animated-stripes" id="file-bar" style="width: {{ file_progress }}%;"></div>
+                    </div>
+                </div>
 
-            {% if eta %}
-            <p class="progress-eta">Estimated time remaining: <strong>{{ eta }}</strong></p>
-            {% endif %}
-            {% else %}
-            <p class="progress-loading">Progress will be shown shortly once the job is underway...</p>
-            {% endif %}
+                <div class="progress-bar-group">
+                    <div class="progress-bar-header">
+                        <span class="progress-bar-label">Overall Progress</span>
+                        <span class="progress-bar-pct" id="job-pct">{{ job_progress }}%</span>
+                    </div>
+                    <div class="progress-bar-track">
+                        <div class="progress-bar-fill animated-stripes job-bar" id="job-bar" style="width: {{ job_progress }}%;"></div>
+                    </div>
+                </div>
+                {% endif %}
+            </div>
         </div>
 
         <!-- Idle State -->
@@ -90,7 +109,7 @@
         </div>
         {% endif %}
 
-        <!-- Restart last job (shown if there's a previous job directory and no job running) -->
+        <!-- Restart last job -->
         {% if last_job_directory %}
         <div class="restart-panel">
             <h4>Restart Previous Job</h4>
@@ -208,34 +227,85 @@
             document.getElementById('quality-value').textContent = value;
         }
 
-        // Show loading spinner when the library form is submitted
         document.addEventListener('DOMContentLoaded', function() {
+            // Loading spinner for library form
             const libraryForm = document.getElementById('library-form');
             const loadingIcon = document.getElementById('loading-icon');
-
             if (libraryForm) {
                 libraryForm.addEventListener('submit', function(event) {
                     event.preventDefault();
                     loadingIcon.style.display = 'flex';
-
                     const formData = new FormData(libraryForm);
-                    fetch(libraryForm.action, {
-                        method: 'POST',
-                        body: formData
-                    })
-                    .then(response => response.text())
-                    .then(data => {
-                        document.open();
-                        document.write(data);
-                        document.close();
-                    })
-                    .catch(error => {
-                        console.error('Error:', error);
-                        loadingIcon.style.display = 'none';
-                    });
+                    fetch(libraryForm.action, { method: 'POST', body: formData })
+                        .then(response => response.text())
+                        .then(data => { document.open(); document.write(data); document.close(); })
+                        .catch(error => { console.error('Error:', error); loadingIcon.style.display = 'none'; });
                 });
             }
+
+            // AJAX polling for transcode progress (no full page reload)
+            const progressPanel = document.getElementById('progress-panel');
+            if (progressPanel) {
+                setInterval(pollJobStatus, 4000);
+            }
         });
+
+        function pollJobStatus() {
+            fetch('/job_status')
+                .then(r => r.json())
+                .then(data => {
+                    if (!data.running) {
+                        // Job finished — reload page to show idle state
+                        window.location.reload();
+                        return;
+                    }
+
+                    const currentFile = data.current_file || '';
+                    const fileProgress = parseInt(data.file_progress) || 0;
+                    const jobProgress = parseInt(data.job_progress) || 0;
+                    const eta = data.eta || '—';
+                    const fileNum = data.current_file_number || '';
+                    const totalFiles = data.total_files || '';
+
+                    // Update meta cards
+                    const metaEta = document.getElementById('meta-eta');
+                    const metaCounter = document.getElementById('meta-file-counter');
+                    if (metaEta) metaEta.textContent = eta;
+                    if (metaCounter && fileNum && totalFiles) {
+                        metaCounter.textContent = fileNum + ' of ' + totalFiles;
+                    }
+
+                    // Update current file display
+                    const fileDisplay = document.getElementById('current-file-display');
+                    if (fileDisplay && currentFile && !currentFile.includes('Loading')) {
+                        fileDisplay.innerHTML =
+                            '<span class="current-file-label">Now transcoding:</span>' +
+                            '<span class="current-file-name" id="current-file-name">' + currentFile + '</span>';
+                    }
+
+                    // Update progress bars
+                    const barsContainer = document.getElementById('progress-bars');
+                    if (barsContainer && currentFile && !currentFile.includes('Loading')) {
+                        // Ensure bars exist
+                        if (!document.getElementById('file-bar')) {
+                            barsContainer.innerHTML =
+                                '<div class="progress-bar-group"><div class="progress-bar-header"><span class="progress-bar-label">File Progress</span><span class="progress-bar-pct" id="file-pct">0%</span></div><div class="progress-bar-track"><div class="progress-bar-fill animated-stripes" id="file-bar" style="width: 0%;"></div></div></div>' +
+                                '<div class="progress-bar-group"><div class="progress-bar-header"><span class="progress-bar-label">Overall Progress</span><span class="progress-bar-pct" id="job-pct">0%</span></div><div class="progress-bar-track"><div class="progress-bar-fill animated-stripes job-bar" id="job-bar" style="width: 0%;"></div></div></div>';
+                        }
+
+                        const fileBar = document.getElementById('file-bar');
+                        const jobBar = document.getElementById('job-bar');
+                        const filePct = document.getElementById('file-pct');
+                        const jobPct = document.getElementById('job-pct');
+
+                        if (fileBar) fileBar.style.width = fileProgress + '%';
+                        if (jobBar) jobBar.style.width = jobProgress + '%';
+                        if (filePct) filePct.textContent = fileProgress + '%';
+                        if (jobPct) jobPct.textContent = jobProgress + '%';
+                    }
+                })
+                .catch(err => console.warn('Poll failed:', err));
+        }
     </script>
 </body>
 </html>
