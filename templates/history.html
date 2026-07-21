@@ -4,6 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>x265 Transcoder - History</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
 </head>
 <body>
@@ -136,7 +138,7 @@
             </div>
             {% endif %}
 
-            <p><a href="{{ url_for('history') }}">&larr; Back to job list</a></p>
+            <p><a href="{{ url_for('history') }}" style="color: var(--accent-blue);">&larr; Back to job list</a></p>
         </div>
         {% endif %}
 
@@ -187,7 +189,7 @@
         </div>
         <p class="table-legend">Files column: success / failed / skipped</p>
         {% else %}
-        <p>No transcode jobs recorded yet. Jobs will appear here after your first transcode.</p>
+        <p style="color: var(--text-muted);">No transcode jobs recorded yet. Jobs will appear here after your first transcode.</p>
         {% endif %}
     </div>
 </body>

@@ -3,12 +3,26 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Setup Configuration</title>
+    <title>x265 Transcoder - Settings</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
 </head>
 <body>
-    <div class="container">
-    <h1>Setup Configuration</h1>
+    <!-- Navigation -->
+    <nav class="main-nav">
+        <div class="nav-brand">x265 Transcoder</div>
+        <div class="nav-links-bar">
+            <a href="{{ url_for('index') }}" class="nav-link">Transcode</a>
+            <a href="{{ url_for('recommendations') }}" class="nav-link">Recommendations</a>
+            <a href="{{ url_for('history') }}" class="nav-link">History</a>
+            <a href="{{ url_for('setup') }}" class="nav-link nav-link-secondary active">Settings</a>
+        </div>
+        <span class="nav-version">v{{ version }}</span>
+    </nav>
+
+    <div class="container page-content">
+    <h3>Settings</h3>
     <form method="POST">
         <p>Enable Telegram Notifications:</p>
         <label class="switch">

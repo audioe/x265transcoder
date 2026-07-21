@@ -200,6 +200,7 @@ Key fields written by `x265transcoder.py`:
 |----------|--------|-----------|
 | Web framework | Flask | Lightweight; minimal overhead for a single-user internal tool |
 | Template engine | Jinja2 (bundled with Flask) | No separate build step required |
+| Frontend UI | Dark theme, CSS-only charts, CSS animations | Modern look without JS frameworks; Inter font via Google Fonts; conic-gradient donut chart and animated bar charts for data visualization |
 | Hardware encoder | `hevc_qsv` via jellyfin-ffmpeg | Jellyfin's FFmpeg build bundles QSV support; avoids manual FFmpeg compilation |
 | Progress tracking | `ffmpeg-progress-yield` | Parses FFmpeg stderr to yield per-frame % without custom regex |
 | Media analysis | `pymediainfo` (Python binding for libmediainfo) | More reliable than parsing `ffmpeg -i` output; works on all common containers |

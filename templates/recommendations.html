@@ -4,6 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>x265 Transcoder - Recommendations</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
     {% if scan_status.running %}
     <meta http-equiv="refresh" content="3">
@@ -110,6 +112,68 @@
             </form>
             {% endif %}
         </div>
+
+        <!-- Visual Charts Row -->
+        <div class="charts-row">
+            <!-- Donut Chart: Codec Ratio -->
+            <div class="chart-card">
+                <h4>Codec Distribution</h4>
+                {% set total = data.stats.x264_count + data.stats.x265_count %}
+                {% if total > 0 %}
+                {% set x265_pct = ((data.stats.x265_count / total) * 100) | round(1) %}
+                {% set x264_pct = (100 - x265_pct) | round(1) %}
+                <div class="donut-chart" style="background: conic-gradient(#48bb78 0deg {{ (x265_pct * 3.6) | round }}deg, #ed8936 {{ (x265_pct * 3.6) | round }}deg 360deg);">
+                    <div class="donut-center">
+                        <span class="donut-value">{{ x265_pct }}%</span>
+                        <span class="donut-label">x265</span>
+                    </div>
+                </div>
+                <div class="chart-legend">
+                    <span class="legend-item"><span class="legend-dot x265"></span> x265 ({{ data.stats.x265_count }})</span>
+                    <span class="legend-item"><span class="legend-dot x264"></span> x264 ({{ data.stats.x264_count }})</span>
+                </div>
+                {% else %}
+                <p style="color: var(--text-muted);">No data available</p>
+                {% endif %}
+            </div>
+
+            <!-- Bar Chart: Size Comparison -->
+            <div class="chart-card">
+                <h4>Storage by Codec</h4>
+                {% set max_size = [data.stats.x264_size_gb, data.stats.x265_size_gb] | max %}
+                {% if max_size > 0 %}
+                <div class="bar-chart">
+                    <div class="bar-item">
+                        <span class="bar-label">x264</span>
+                        <div class="bar-track">
+                            <div class="bar-fill x264" style="width: {{ (data.stats.x264_size_gb / max_size * 100) | round }}%;">
+                                <span class="bar-value">{{ data.stats.x264_size_gb }} GB</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="bar-item">
+                        <span class="bar-label">x265</span>
+                        <div class="bar-track">
+                            <div class="bar-fill x265" style="width: {{ (data.stats.x265_size_gb / max_size * 100) | round }}%;">
+                                <span class="bar-value">{{ data.stats.x265_size_gb }} GB</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="bar-item">
+                        <span class="bar-label">Total</span>
+                        <div class="bar-track">
+                            <div class="bar-fill x265" style="width: 100%; background: var(--gradient-blue);">
+                                <span class="bar-value">{{ data.stats.total_size_gb }} GB</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% else %}
+                <p style="color: var(--text-muted);">No data available</p>
+                {% endif %}
+            </div>
+        </div>
+
         {% else %}
         <div class="stats-panel">
             <p>No scan data available. Run a scan to populate recommendations.</p>
@@ -310,11 +374,10 @@
         function sortTable(tableId, colIndex) {
             const table = document.getElementById(tableId);
             const tbody = table.querySelector('tbody');
-            const rows = Array.from(tbody.querySelectorAll('tr'));
+            const rows = Array.from(tbody.querySelectorAll('tr:not(.options-row)'));
             const header = table.querySelectorAll('th')[colIndex];
             const sortType = header.getAttribute('data-sort');
 
-            // Toggle direction
             const key = tableId + '_' + colIndex;
             sortState[key] = !sortState[key];
             const ascending = sortState[key];
@@ -340,8 +403,25 @@
                 return 0;
             });
 
-            rows.forEach(row => tbody.appendChild(row));
+            // Re-append rows along with their associated options-row
+            rows.forEach(row => {
+                tbody.appendChild(row);
+                const nextRow = row.nextElementSibling;
+                if (nextRow && nextRow.classList.contains('options-row')) {
+                    tbody.appendChild(nextRow);
+                }
+            });
         }
+
+        // Animate bar chart fills on load
+        document.addEventListener('DOMContentLoaded', function() {
+            const bars = document.querySelectorAll('.bar-fill');
+            bars.forEach(bar => {
+                const targetWidth = bar.style.width;
+                bar.style.width = '0%';
+                setTimeout(() => { bar.style.width = targetWidth; }, 100);
+            });
+        });
     </script>
 </body>
 </html>

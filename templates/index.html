@@ -4,6 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>x265 Transcoder</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
     {% if transcoder_status == True %}
     <meta http-equiv="refresh" content="5">
@@ -45,13 +47,13 @@
                 {% endif %}
             </p>
 
-            <label for="file-progress">File Progress:</label>
+            <label for="file-progress">File Progress</label>
             <div class="progress-container">
                 <progress id="file-progress" value="{{ file_progress }}" max="100"></progress>
                 <span class="progress-text">{{ file_progress }}%</span>
             </div>
 
-            <label for="job-progress">Overall Job Progress:</label>
+            <label for="job-progress">Overall Job Progress</label>
             <div class="progress-container">
                 <progress id="job-progress" value="{{ job_progress }}" max="100"></progress>
                 <span class="progress-text">{{ job_progress }}%</span>
@@ -74,7 +76,7 @@
             <div class="dashboard-cards">
                 <div class="dashboard-card">
                     <span class="dashboard-value">{{ dashboard_stats.x264_count }}</span>
-                    <span class="dashboard-label">x264 files remaining</span>
+                    <span class="dashboard-label">x264 remaining</span>
                 </div>
                 <div class="dashboard-card">
                     <span class="dashboard-value">{{ dashboard_stats.x264_size_gb }} GB</span>
@@ -82,7 +84,7 @@
                 </div>
                 <div class="dashboard-card">
                     <span class="dashboard-value">{{ dashboard_stats.x265_count }}</span>
-                    <span class="dashboard-label">x265 files complete</span>
+                    <span class="dashboard-label">x265 complete</span>
                 </div>
             </div>
         </div>
