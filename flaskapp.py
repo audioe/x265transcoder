@@ -1,20 +1,23 @@
 from flask import Flask, render_template, request, jsonify, redirect, url_for
 import subprocess
 import os
+import shutil
 import yaml
+import logging
+import threading
+from apscheduler.schedulers.background import BackgroundScheduler
+from modules.scanner import run_scan, get_recommendations, get_scan_status, get_scan_history
+from modules.history import get_job_history, get_job_files, get_lifetime_stats
 
 app = Flask(__name__)
+
+# Configure logging for the scanner scheduler
+logging.basicConfig(level=logging.INFO)
+scheduler_logger = logging.getLogger("scanner_scheduler")
 
 # Read the version number from the file
 with open('version.txt', 'r') as f:
     version = f.read().strip()
-
-# Load the configuration file
-if os.path.exists('/config/config.yaml'):
-    with open('/config/config.yaml', 'r') as f:
-        config = yaml.safe_load(f)
-else:
-    config_present = "False"
 
 # Load the /config/job.yaml file
 job_directory = ''
@@ -26,6 +29,15 @@ if os.path.exists('/config/job.yaml'):
         job_directory = job_config.get('job_directory', '')
         job_progress = job_config.get('job_progress', '')
         file_progress = job_config.get('file_progress', '')
+
+def load_config():
+    global config
+    # Load the configuration file
+    if os.path.exists('/config/config.yaml'):
+        with open('/config/config.yaml', 'r') as f:
+            config = yaml.safe_load(f)
+    else:
+        return redirect(url_for('setup'))
 
 # Function to get list of directories
 def get_directories(parent_dir, directories=None):
@@ -125,9 +137,11 @@ def store_job(job_data):
 #        # Append the job data to the file
 #        f.write(job_data)
 
+
 # Route to render the HTML page
 @app.route('/')
 def index():
+    load_config()
     transcoder_status = transcode_check('x265transcoder.py')
     job_directory = ''
     job_progress = ''
@@ -135,12 +149,17 @@ def index():
     current_file_number = ''
     current_file = ''
     total_files = ''
+    eta = ''
     if transcoder_status == True:
         with open('/config/job.yaml', 'r') as f:
             job_config = yaml.safe_load(f)
+            # Guard against empty/corrupt YAML (returns None during concurrent writes)
+            if job_config is None:
+                job_config = {}
             job_directory = job_config.get('job_directory', '')
             job_progress = job_config.get('job_progress', '')
             file_progress = job_config.get('file_progress', '')
+            eta = job_config.get('eta', '')
             try:
                 current_file_number = job_config.get('current_file_number', '')
             except:
@@ -156,11 +175,81 @@ def index():
             except:
                 total_files = "Loading..."
                 pass
-    return render_template('index.html', version=version, os=os, config=config, transcoder_status=transcoder_status, job_directory=job_directory, job_progress=job_progress, file_progress=file_progress, current_file_number=current_file_number, current_file=current_file, total_files=total_files)
+
+    # Get library summary stats for the dashboard (when idle)
+    dashboard_stats = get_recommendations(limit=0).get('stats', {}) if not transcoder_status else {}
+
+    # Get last job directory for restart capability (when idle)
+    last_job_directory = ''
+    if not transcoder_status and os.path.exists('/config/job.yaml'):
+        try:
+            with open('/config/job.yaml', 'r') as f:
+                last_job_config = yaml.safe_load(f)
+                if last_job_config:
+                    last_job_directory = last_job_config.get('job_directory', '')
+        except:
+            pass
+
+    return render_template('index.html', version=version, os=os, config=config,
+                           transcoder_status=transcoder_status, job_directory=job_directory,
+                           job_progress=job_progress, file_progress=file_progress,
+                           current_file_number=current_file_number, current_file=current_file,
+                           total_files=total_files, eta=eta, dashboard_stats=dashboard_stats,
+                           last_job_directory=last_job_directory, active_page='home')
+
+@app.route('/setup', methods=['GET', 'POST'])
+def setup():
+    if request.method == 'POST':
+        use_telegram = 'use_telegram' in request.form
+        telegram_chat_id = request.form.get('telegram_chat_id', '')
+        telegram_token = request.form.get('telegram_token', '')
+        shows_directory = request.form.get('shows_directory', '')
+        films_directory = request.form.get('films_directory', '')
+
+        config = {
+            'secrets': {
+                'TELEGRAM_TOKEN': telegram_token if use_telegram else '',
+                'TELEGRAM_CHATID': telegram_chat_id if use_telegram else ''
+            },
+            'libraries': {
+                'shows': shows_directory,
+                'films': films_directory
+            },
+            'encoder': request.form.get('encoder', 'auto')
+        }
+
+        with open('/config/config.yaml', 'w') as f:
+            yaml.dump(config, f)
+
+        return redirect(url_for('index'))
+
+    # Load existing config if it exists
+    config = {}
+    if os.path.exists('/config/config.yaml'):
+        with open('/config/config.yaml', 'r') as f:
+            config = yaml.safe_load(f)
+
+    # Set default values, using existing config if available
+    default_shows = config.get('libraries', {}).get('shows', '/shows')
+    default_films = config.get('libraries', {}).get('films', '/films')
+    use_telegram = bool(config.get('secrets', {}).get('TELEGRAM_TOKEN'))
+    telegram_chat_id = config.get('secrets', {}).get('TELEGRAM_CHATID', '')
+    telegram_token = config.get('secrets', {}).get('TELEGRAM_TOKEN', '')
+    current_encoder = config.get('encoder', 'auto')
+
+    return render_template('setup.html', 
+                           default_shows=default_shows, 
+                           default_films=default_films,
+                           use_telegram=use_telegram,
+                           telegram_chat_id=telegram_chat_id,
+                           telegram_token=telegram_token,
+                           current_encoder=current_encoder,
+                           version=version)
 
 # Route to handle loading directories
 @app.route('/load_directories', methods=['POST'])
 def load_directories():
+    load_config()
     parent_dir = request.form.get('parent_dir', '/shows')
     is_films = parent_dir == config['libraries']['films']
 
@@ -171,7 +260,7 @@ def load_directories():
             'path': os.path.join(parent_dir, entry),
             'size': str(get_directory_size(os.path.join(parent_dir, entry))) + " GB"
         } for entry in os.listdir(parent_dir) if os.path.isdir(os.path.join(parent_dir, entry))], key=lambda x: x['name'].lower())
-        html = render_template('index.html', subdirectories=subdirectories, version=version, os=os, current_dir=parent_dir, parent_dir=parent_dir, config=config, films='films')
+        html = render_template('index.html', subdirectories=subdirectories, version=version, os=os, current_dir=parent_dir, parent_dir=parent_dir, config=config, films='films', active_page='home')
     else:
         # If the selected parent directory is for shows, render the folder selection form
         directories = sorted([{
@@ -179,12 +268,13 @@ def load_directories():
             'path': os.path.join(parent_dir, entry),
             'size': str(get_directory_size(os.path.join(parent_dir, entry))) + " GB"
         } for entry in os.listdir(parent_dir) if os.path.isdir(os.path.join(parent_dir, entry))], key=lambda x: x['name'].lower())
-        html = render_template('index.html', directories=directories, version=version, os=os, config=config)
+        html = render_template('index.html', directories=directories, version=version, os=os, config=config, active_page='home')
     return html
 
 # Route to handle loading subdirectories (for TV shows)
 @app.route('/load_subdirectories', methods=['POST'])
 def load_subdirectories():
+    load_config()
     parent_dir = request.form.get('parent_dir')
     current_dir = request.form.get('folder')
 
@@ -192,18 +282,19 @@ def load_subdirectories():
         subdirectories = sorted([{'name': entry, 'path': os.path.join(current_dir, entry), 'size': str(get_directory_size(os.path.join(current_dir, entry))) + " GB"}
                                  for entry in os.listdir(current_dir)
                                  if os.path.isdir(os.path.join(current_dir, entry))], key=lambda x: x['name'].lower())
-        html = render_template('index.html', subdirectories=subdirectories, version=version, os=os, current_dir=current_dir, parent_dir=parent_dir, config=config, shows='shows')
+        html = render_template('index.html', subdirectories=subdirectories, version=version, os=os, current_dir=current_dir, parent_dir=parent_dir, config=config, shows='shows', active_page='home')
     else:
         directories = sorted([{'name': entry, 'path': os.path.join(parent_dir, entry), 'size': str(get_directory_size(os.path.join(parent_dir, entry))) + " GB"}
                               for entry in os.listdir(parent_dir)
                               if os.path.isdir(os.path.join(parent_dir, entry))], key=lambda x: x['name'].lower())
-        html = render_template('index.html', directories=directories, version=version, os=os, current_dir=parent_dir, parent_dir=parent_dir, config=config)
+        html = render_template('index.html', directories=directories, version=version, os=os, current_dir=parent_dir, parent_dir=parent_dir, config=config, active_page='home')
 
     return html
 
 # Route to handle running the Transcoder
 @app.route("/run", methods=["POST"])
 def run():
+    load_config()
     if request.method == 'POST':
         folder = str(request.form['folder'])
         include = request.form['include']
@@ -220,6 +311,238 @@ def run():
         update_progress_yaml("job_progress", 0)
         update_progress_yaml("file_progress", 0)
         return redirect(url_for('index'))
+
+
+# Route to run a transcode job directly from the recommendations page
+@app.route("/run_from_recommendations", methods=["POST"])
+def run_from_recommendations():
+    load_config()
+    # Check if a job is already running
+    if transcode_check('x265transcoder.py'):
+        return redirect(url_for('recommendations'))
+
+    folder = str(request.form['folder'])
+    include = request.form.get('include', '.mkv')
+    quality = request.form.get('quality', '23')
+    delete = request.form.get('delete', 'Yes')
+
+    # Get Telegram secrets
+    telegram_token = get_secret("TELEGRAM_TOKEN")
+    telegram_chatid = get_secret("TELEGRAM_CHATID")
+
+    # Store the job data
+    store_job(folder)
+
+    # Launch the transcoder
+    subprocess.Popen(['python', 'x265transcoder.py', folder, include, quality, delete,
+                      str(telegram_token), str(telegram_chatid), version])
+    update_progress_yaml("job_progress", 0)
+    update_progress_yaml("file_progress", 0)
+
+    return redirect(url_for('index'))
+
+
+# Function to clean up partially completed transcode files in a directory
+def cleanup_interrupted_transcodes(directory):
+    """
+    Restore _old files and remove partial x265 outputs.
     
+    When a transcode is interrupted:
+    - Original file was renamed: movie.mkv -> movie.mkv_old
+    - Partial output may exist: movie.mkv (or movie_x265.mkv if name contained "264")
+    
+    This function:
+    1. Finds all *_old files
+    2. Determines what the output filename would have been
+    3. Deletes the partial output (if it exists)
+    4. Renames the _old file back to its original name
+    
+    Returns a count of files restored.
+    """
+    restored = 0
+    for dirpath, _, filenames in os.walk(directory):
+        for filename in filenames:
+            if not filename.endswith("_old"):
+                continue
+
+            old_filepath = os.path.join(dirpath, filename)
+            # Original filename is the _old file without the _old suffix
+            original_filename = filename[:-4]  # strip "_old"
+            original_filepath = os.path.join(dirpath, original_filename)
+
+            # Determine what the output file would have been called
+            if "264" in original_filename:
+                output_filename = original_filename.replace('264', '265')
+            else:
+                output_filename = original_filename
+            output_filepath = os.path.join(dirpath, output_filename)
+
+            # Delete the partial output file if it exists
+            if os.path.exists(output_filepath) and output_filepath != original_filepath:
+                try:
+                    os.remove(output_filepath)
+                except OSError:
+                    pass
+
+            # Also delete the original path if it exists and is different from _old
+            # (this handles the case where output_filename == original_filename)
+            if output_filename == original_filename and os.path.exists(original_filepath):
+                try:
+                    os.remove(original_filepath)
+                except OSError:
+                    pass
+
+            # Rename _old file back to original name
+            try:
+                shutil.move(old_filepath, original_filepath)
+                restored += 1
+            except OSError:
+                pass
+
+    return restored
+
+
+# Route to restart a previously interrupted job (with cleanup)
+@app.route("/restart_job", methods=["POST"])
+def restart_job():
+    load_config()
+    # Check if a job is already running
+    if transcode_check('x265transcoder.py'):
+        return redirect(url_for('index'))
+
+    folder = str(request.form['folder'])
+    include = request.form.get('include', '.mkv')
+    quality = request.form.get('quality', '23')
+    delete = request.form.get('delete', 'Yes')
+
+    # Clean up any partially transcoded files first
+    restored_count = cleanup_interrupted_transcodes(folder)
+
+    # Get Telegram secrets
+    telegram_token = get_secret("TELEGRAM_TOKEN")
+    telegram_chatid = get_secret("TELEGRAM_CHATID")
+
+    # Store the job data
+    store_job(folder)
+
+    # Launch the transcoder
+    subprocess.Popen(['python', 'x265transcoder.py', folder, include, quality, delete,
+                      str(telegram_token), str(telegram_chatid), version])
+    update_progress_yaml("job_progress", 0)
+    update_progress_yaml("file_progress", 0)
+
+    return redirect(url_for('index'))
+
+    
+# --- Scheduled Scanner ---
+
+def scheduled_scan_job():
+    """Run the media scanner as a scheduled job."""
+    scheduler_logger.info("Scheduled scan starting...")
+    try:
+        load_config()
+        libraries = config.get('libraries', {})
+        run_scan(libraries)
+        scheduler_logger.info("Scheduled scan complete.")
+    except Exception as e:
+        scheduler_logger.error(f"Scheduled scan failed: {e}")
+
+
+# Initialise the background scheduler (runs daily at 04:00)
+scheduler = BackgroundScheduler(daemon=True)
+scheduler.add_job(scheduled_scan_job, 'cron', hour=4, minute=0, id='nightly_scan')
+scheduler.start()
+
+
+# --- Recommendations & Scan Routes ---
+
+@app.route('/recommendations')
+def recommendations():
+    load_config()
+    data = get_recommendations(limit=50)
+    scan_status = get_scan_status()
+    history = get_scan_history(limit=10)
+    transcoder_running = transcode_check('x265transcoder.py')
+    return render_template('recommendations.html', version=version, config=config,
+                           data=data, scan_status=scan_status, scan_history=history,
+                           transcoder_running=transcoder_running, active_page='recommendations')
+
+
+@app.route('/scan_now', methods=['POST'])
+def scan_now():
+    """Trigger an immediate media library scan in a background thread."""
+    scan_status = get_scan_status()
+    if scan_status.get("running"):
+        # Already running — just redirect back
+        return redirect(url_for('recommendations'))
+
+    load_config()
+    libraries = config.get('libraries', {})
+
+    def _run_in_background():
+        try:
+            run_scan(libraries)
+        except Exception as e:
+            scheduler_logger.error(f"Manual scan failed: {e}")
+
+    thread = threading.Thread(target=_run_in_background, daemon=True)
+    thread.start()
+
+    return redirect(url_for('recommendations'))
+
+
+@app.route('/scan_status')
+def scan_status_endpoint():
+    """JSON endpoint for polling scan progress."""
+    return jsonify(get_scan_status())
+
+
+@app.route('/job_status')
+def job_status_endpoint():
+    """JSON endpoint for polling transcode job progress."""
+    transcoder_status = transcode_check('x265transcoder.py')
+    result = {'running': transcoder_status}
+    if transcoder_status:
+        try:
+            with open('/config/job.yaml', 'r') as f:
+                job_config = yaml.safe_load(f)
+            if job_config is None:
+                job_config = {}
+            result['job_directory'] = job_config.get('job_directory', '')
+            result['job_progress'] = job_config.get('job_progress', '0')
+            result['file_progress'] = job_config.get('file_progress', '0')
+            result['current_file'] = job_config.get('current_file', '')
+            result['current_file_number'] = job_config.get('current_file_number', '')
+            result['total_files'] = job_config.get('total_files', '')
+            result['eta'] = job_config.get('eta', '')
+        except Exception:
+            pass
+    return jsonify(result)
+
+
+# --- Transcode History Routes ---
+
+@app.route('/history')
+def history():
+    jobs = get_job_history(limit=20)
+    stats = get_lifetime_stats()
+    return render_template('history.html', version=version, jobs=jobs, stats=stats, active_page='history')
+
+
+@app.route('/history/<int:job_id>')
+def history_detail(job_id):
+    jobs = get_job_history(limit=20)
+    # Find the specific job summary
+    job = None
+    for j in jobs:
+        if j["id"] == job_id:
+            job = j
+            break
+    files = get_job_files(job_id)
+    stats = get_lifetime_stats()
+    return render_template('history.html', version=version, jobs=jobs, stats=stats,
+                           selected_job=job, selected_files=files, active_page='history')
+
+
 if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0')
+    app.run(debug=True, host='0.0.0.0', use_reloader=False)

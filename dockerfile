@@ -1,5 +1,5 @@
-# Base image with Python 3
-FROM python:3.9
+# Base image with Python 3.14 on Debian Bookworm (for Jellyfin/Intel driver compatibility)
+FROM python:3.14-bookworm
 
 # Update package lists (optional, but recommended)
 RUN apt-get update
@@ -36,10 +36,17 @@ RUN \
     && echo "Architectures: ${DPKG_ARCHITECTURE}" >> /etc/apt/sources.list.d/jellyfin.sources \
     && echo "Signed-By: /etc/apt/keyrings/jellyfin.gpg" >> /etc/apt/sources.list.d/jellyfin.sources \
     && apt-get update \
-    && apt-get install -y jellyfin-ffmpeg6
+    && apt-get install -y jellyfin-ffmpeg7
 
-# Install gpu dependencies
-RUN apt install -y onevpl-tools vainfo intel-media-va-driver-non-free
+# Install GPU dependencies (Intel QSV, AMD VAAPI, and common VA-API tools)
+RUN apt install -y \
+    vainfo \
+    onevpl-tools \
+    intel-media-va-driver-non-free \
+    mesa-va-drivers
+
+# Note: NVIDIA NVENC requires the NVIDIA Container Toolkit on the host.
+# The nvidia-smi binary is mounted at runtime via --gpus flag, not installed here.
 
 # Install nano to help with troubleshooting and testing
 RUN apt install -y nano

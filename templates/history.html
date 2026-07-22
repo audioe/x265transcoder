@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>x265 Transcoder - History</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+</head>
+<body>
+    <!-- Navigation -->
+    <nav class="main-nav">
+        <div class="nav-brand">x265 Transcoder</div>
+        <div class="nav-links-bar">
+            <a href="{{ url_for('index') }}" class="nav-link {% if active_page == 'home' %}active{% endif %}">Transcode</a>
+            <a href="{{ url_for('recommendations') }}" class="nav-link {% if active_page == 'recommendations' %}active{% endif %}">Recommendations</a>
+            <a href="{{ url_for('history') }}" class="nav-link {% if active_page == 'history' %}active{% endif %}">History</a>
+            <a href="{{ url_for('setup') }}" class="nav-link nav-link-secondary">Settings</a>
+        </div>
+        <span class="nav-version">v{{ version }}</span>
+    </nav>
+
+    <div class="container recommendations-container page-content">
+
+        <!-- Lifetime Statistics -->
+        {% if stats %}
+        <div class="stats-panel">
+            <h3>All-Time Statistics</h3>
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <span class="stat-value">{{ stats.total_jobs }}</span>
+                    <span class="stat-label">Jobs Completed</span>
+                </div>
+                <div class="stat-card">
+                    <span class="stat-value">{{ stats.total_files_transcoded }}</span>
+                    <span class="stat-label">Files Transcoded</span>
+                </div>
+                <div class="stat-card">
+                    <span class="stat-value">{{ stats.total_space_saved_gb }} GB</span>
+                    <span class="stat-label">Total Space Saved</span>
+                </div>
+                <div class="stat-card">
+                    <span class="stat-value">{{ stats.avg_compression_pct }}%</span>
+                    <span class="stat-label">Avg Compression</span>
+                </div>
+                <div class="stat-card">
+                    <span class="stat-value">{{ stats.total_files_failed }}</span>
+                    <span class="stat-label">Files Failed</span>
+                </div>
+                <div class="stat-card">
+                    <span class="stat-value">{{ stats.total_files_skipped }}</span>
+                    <span class="stat-label">Files Skipped</span>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Job Detail (shown when a job is selected) -->
+        {% if selected_job %}
+        <div class="history-detail-panel">
+            <h3>Job Detail: {{ selected_job.directory.split('/')[-1] }}</h3>
+            <div class="job-detail-meta">
+                <p><strong>Directory:</strong> {{ selected_job.directory }}</p>
+                <p><strong>Started:</strong> {{ selected_job.started_at[:19] | replace("T", " ") }} UTC</p>
+                {% if selected_job.completed_at %}
+                <p><strong>Completed:</strong> {{ selected_job.completed_at[:19] | replace("T", " ") }} UTC</p>
+                {% endif %}
+                <p><strong>Quality:</strong> CQP {{ selected_job.quality }}</p>
+                <p><strong>Delete originals:</strong> {{ selected_job.delete_originals }}</p>
+                <p>
+                    <strong>Result:</strong>
+                    {{ selected_job.successful_count }} succeeded,
+                    {{ selected_job.failed_count }} failed,
+                    {{ selected_job.skipped_count }} skipped
+                </p>
+                {% if selected_job.total_original_bytes and selected_job.total_original_bytes > 0 %}
+                <p>
+                    <strong>Space saved:</strong>
+                    {{ "%.2f"|format(selected_job.total_space_saved_bytes / (1024**3)) }} GB
+                    ({{ "%.1f"|format((1 - selected_job.total_new_bytes / selected_job.total_original_bytes) * 100) }}% reduction)
+                </p>
+                {% endif %}
+            </div>
+
+            {% if selected_files %}
+            <div class="table-container">
+                <table class="recommendations-table">
+                    <thead>
+                        <tr>
+                            <th>Filename</th>
+                            <th>Status</th>
+                            <th>Original</th>
+                            <th>New</th>
+                            <th>Saved</th>
+                            <th>Duration</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for file in selected_files %}
+                        <tr class="scan-row-{{ file.status }}">
+                            <td title="{{ file.filepath }}">{{ file.filename }}</td>
+                            <td>
+                                {% if file.status == "success" %}
+                                    <span class="status-badge status-success">Success</span>
+                                {% elif file.status == "failed" %}
+                                    <span class="status-badge status-failed" title="{{ file.failure_reason }}">Failed</span>
+                                {% elif file.status == "skipped" %}
+                                    <span class="status-badge status-skipped">Skipped</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if file.original_size_bytes %}
+                                    {{ "%.2f"|format(file.original_size_bytes / (1024**3)) }} GB
+                                {% else %}—{% endif %}
+                            </td>
+                            <td>
+                                {% if file.new_size_bytes %}
+                                    {{ "%.2f"|format(file.new_size_bytes / (1024**3)) }} GB
+                                {% else %}—{% endif %}
+                            </td>
+                            <td>
+                                {% if file.space_saved_bytes and file.space_saved_bytes > 0 %}
+                                    {{ "%.2f"|format(file.space_saved_bytes / (1024**3)) }} GB
+                                {% else %}—{% endif %}
+                            </td>
+                            <td>
+                                {% if file.duration_seconds %}
+                                    {% set mins = (file.duration_seconds // 60) | int %}
+                                    {% set secs = (file.duration_seconds % 60) | int %}
+                                    {{ mins }}m {{ secs }}s
+                                {% else %}—{% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% endif %}
+
+            <p><a href="{{ url_for('history') }}" style="color: var(--accent-blue);">&larr; Back to job list</a></p>
+        </div>
+        {% endif %}
+
+        <!-- Job List -->
+        <h3>Recent Transcode Jobs</h3>
+        {% if jobs %}
+        <div class="table-container">
+            <table class="recommendations-table">
+                <thead>
+                    <tr>
+                        <th>Directory</th>
+                        <th>Date</th>
+                        <th>Files</th>
+                        <th>Status</th>
+                        <th>Space Saved</th>
+                        <th>Quality</th>
+                        <th>Details</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for job in jobs %}
+                    <tr>
+                        <td title="{{ job.directory }}">{{ job.directory.split('/')[-1] }}</td>
+                        <td>{{ job.started_at[:16] | replace("T", " ") }}</td>
+                        <td>{{ job.successful_count }}/{{ job.failed_count }}/{{ job.skipped_count }}</td>
+                        <td>
+                            {% if job.status == "success" %}
+                                <span class="status-badge status-success">Success</span>
+                            {% elif job.status == "completed_with_failures" %}
+                                <span class="status-badge status-failed">Failures</span>
+                            {% elif job.status == "running" %}
+                                <span class="status-badge status-running">Running</span>
+                            {% else %}
+                                {{ job.status }}
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if job.total_space_saved_bytes and job.total_space_saved_bytes > 0 %}
+                                {{ "%.2f"|format(job.total_space_saved_bytes / (1024**3)) }} GB
+                            {% else %}—{% endif %}
+                        </td>
+                        <td>{{ job.quality }}</td>
+                        <td><a href="{{ url_for('history_detail', job_id=job.id) }}" class="btn-detail">View</a></td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        <p class="table-legend">Files column: success / failed / skipped</p>
+        {% else %}
+        <p style="color: var(--text-muted);">No transcode jobs recorded yet. Jobs will appear here after your first transcode.</p>
+        {% endif %}
+    </div>
+</body>
+</html>

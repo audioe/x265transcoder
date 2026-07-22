@@ -6,17 +6,19 @@ inclusion: always
 
 ## Language and runtime
 
-- Python 3.9 (matches the Docker base image `python:3.9`).
+- Python 3.14 (Docker base image `python:3.14-bookworm`; Bookworm chosen for Jellyfin/Intel driver compatibility).
 - No type annotations currently used; adding them is welcome but not required.
 - Dependencies are managed in `requirements.txt`. Pin versions when adding new packages.
 - `ffmpeg-progress-yield` is installed separately in the Dockerfile (`pip3 install ffmpeg-progress-yield`) — if it is needed as an explicit dependency, add it to `requirements.txt`.
+- APScheduler is pinned at `3.10.4` in `requirements.txt`. Flask is started with `use_reloader=False` to prevent the scheduler from running twice.
 
 ## Project structure
 
 - Keep Flask routes in `flaskapp.py`. Do not add business logic to route handlers; extract functions.
 - Keep transcode logic in `x265transcoder.py`. It is designed to run as a standalone CLI process.
 - Shared/reusable utilities belong in `modules/`.
-- HTML templates go in `templates/`. CSS goes in `static/styles.css`. There is a single template (`index.html`) that handles all UI states via Jinja2 conditionals.
+- `modules/scanner.py` is the active media inventory scanner (SQLite-backed). `modules/collector.py` is legacy (YAML-backed) and should not be extended.
+- HTML templates go in `templates/`. CSS goes in `static/styles.css`. There is a single template (`index.html`) that handles all transcoder UI states, plus `recommendations.html` for the library overview and `setup.html` for initial config.
 
 ## Configuration and secrets
 
@@ -27,6 +29,7 @@ inclusion: always
 
 - Flask and `x265transcoder.py` share state through `/config/job.yaml`. Both processes read and write this file. See `docs/architecture.md` for the full field schema.
 - There is currently no file locking on `job.yaml` (ISS-001 in `docs/issue-log.md`). Be careful adding new read/write operations to this file.
+- `modules/scanner.py` uses SQLite (`/config/media.db`) with WAL mode for the media inventory. Flask reads this DB on `GET /recommendations`; the scanner writes to it during scans. SQLite handles this concurrency safely.
 
 ## Known issues to be aware of
 
@@ -41,7 +44,7 @@ Before making changes, check `docs/issue-log.md` for relevant open issues. Key o
 - The container image is `audioe/x265transcoder`. Tags: `latest` (main branch), `dev` (dev branch).
 - GitHub Actions workflows in `.github/workflows/` build and push automatically on branch push.
 - The `dev` workflow appends `_dev` to `version.txt` before building — do not commit that change back.
-- Increment `version.txt` manually when releasing. No automated versioning tooling is configured.
+- Versioning uses CalVer: `YYYY.MM.patch`. The patch resets to 0 on a new month. A Kiro hook (`auto-version-bump`) auto-increments `version.txt` at session end if changes were made. Do NOT manually edit `version.txt` unless resetting the scheme.
 - The container requires `/dev/dri` passed through for Intel QSV. See `docs/deployment.md` for full hardware and volume requirements.
 
 ## Logging

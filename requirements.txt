@@ -2,3 +2,4 @@ pymediainfo
 requests
 flask
 pyyaml
+APScheduler==3.10.4

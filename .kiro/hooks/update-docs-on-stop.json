@@ -1,0 +1,14 @@
+{
+  "version": "v1",
+  "hooks": [
+    {
+      "name": "Update Steering & Docs on Session End",
+      "trigger": "Stop",
+      "description": "On session end, reviews the conversation for new/changed information and updates steering rules and documentation files accordingly.",
+      "action": {
+        "type": "agent",
+        "prompt": "Before ending this session, review the conversation that just occurred. If any changes were made that affect the project's architecture, processes, known issues, deployment instructions, or development conventions, update the relevant documentation and steering files:\n\nDocumentation files (update with new/changed details):\n- docs/architecture.md — component overview, data flow, technology decisions\n- docs/deployment.md — Docker, volumes, CI/CD, QSV setup, troubleshooting\n- docs/processes.md — step-by-step logical flows for all operations\n- docs/issue-log.md — known bugs, limitations, improvement backlog\n\nSteering files (keep lightweight; point to docs for detail):\n- .kiro/steering/project-overview.md — component table, runtime paths, tech stack, doc index\n- .kiro/steering/dev-conventions.md — structure rules, config/secrets, IPC, CI/CD, logging\n\nRules for updates:\n1. Only update files where the session introduced genuinely new or changed information.\n2. Keep steering files concise — add a brief mention and reference the relevant docs/ file for detail.\n3. If a new issue was discovered or an existing issue was resolved, update docs/issue-log.md accordingly.\n4. If a new file or module was added, update the component table in both the steering overview and docs/architecture.md.\n5. If no documentation-relevant changes occurred in this session, do nothing."
+      }
+    }
+  ]
+}

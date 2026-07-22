@@ -1,0 +1,427 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>x265 Transcoder - Recommendations</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+    {% if scan_status.running %}
+    <meta http-equiv="refresh" content="3">
+    {% endif %}
+</head>
+<body>
+    <!-- Navigation -->
+    <nav class="main-nav">
+        <div class="nav-brand">x265 Transcoder</div>
+        <div class="nav-links-bar">
+            <a href="{{ url_for('index') }}" class="nav-link {% if active_page == 'home' %}active{% endif %}">Transcode</a>
+            <a href="{{ url_for('recommendations') }}" class="nav-link {% if active_page == 'recommendations' %}active{% endif %}">Recommendations</a>
+            <a href="{{ url_for('history') }}" class="nav-link {% if active_page == 'history' %}active{% endif %}">History</a>
+            <a href="{{ url_for('setup') }}" class="nav-link nav-link-secondary">Settings</a>
+        </div>
+        <span class="nav-version">v{{ version }}</span>
+    </nav>
+
+    <div class="container recommendations-container page-content">
+
+        <!-- Scan Status Panel (shown when scan is running or recently completed) -->
+        {% if scan_status.running %}
+        <div class="scan-status-panel scan-running">
+            <h3>Scan In Progress</h3>
+            <div class="scan-status-details">
+                <p class="scan-status-type">
+                    <strong>Type:</strong> {{ scan_status.scan_type | capitalize }} scan
+                </p>
+                <p class="scan-status-message">{{ scan_status.message }}</p>
+                {% if scan_status.current_file %}
+                <p class="scan-status-file">
+                    <strong>Current file:</strong> {{ scan_status.current_file }}
+                </p>
+                {% endif %}
+                <p class="scan-status-count">
+                    <strong>Files processed:</strong> {{ scan_status.files_processed }}
+                    {% if scan_status.files_total %}
+                     / {{ scan_status.files_total }}
+                    {% endif %}
+                </p>
+                {% if scan_status.files_total and scan_status.files_total > 0 %}
+                <div class="progress-container">
+                    <progress value="{{ scan_status.files_processed }}" max="{{ scan_status.files_total }}"></progress>
+                    <span class="progress-text">{{ ((scan_status.files_processed / scan_status.files_total) * 100) | int }}%</span>
+                </div>
+                {% endif %}
+            </div>
+            <p class="scan-status-hint">This page refreshes automatically every 3 seconds.</p>
+        </div>
+        {% elif scan_status.phase == "complete" %}
+        <div class="scan-status-panel scan-complete">
+            <p>{{ scan_status.message }}</p>
+        </div>
+        {% elif scan_status.phase == "failed" %}
+        <div class="scan-status-panel scan-failed">
+            <p>{{ scan_status.message }}</p>
+        </div>
+        {% endif %}
+
+        <!-- Library Statistics -->
+        {% if data.stats %}
+        <div class="stats-panel">
+            <h3>Library Overview</h3>
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <span class="stat-value">{{ data.stats.total_files }}</span>
+                    <span class="stat-label">Total Files</span>
+                </div>
+                <div class="stat-card">
+                    <span class="stat-value">{{ data.stats.x264_count }}</span>
+                    <span class="stat-label">x264 Files</span>
+                </div>
+                <div class="stat-card">
+                    <span class="stat-value">{{ data.stats.x265_count }}</span>
+                    <span class="stat-label">x265 Files</span>
+                </div>
+                <div class="stat-card">
+                    <span class="stat-value">{{ data.stats.x264_size_gb }} GB</span>
+                    <span class="stat-label">x264 Total Size</span>
+                </div>
+                <div class="stat-card">
+                    <span class="stat-value">{{ data.stats.x265_size_gb }} GB</span>
+                    <span class="stat-label">x265 Total Size</span>
+                </div>
+                <div class="stat-card">
+                    <span class="stat-value">{{ data.stats.total_size_gb }} GB</span>
+                    <span class="stat-label">Total Library Size</span>
+                </div>
+            </div>
+
+            <p class="scan-info">
+                {% if data.stats.last_incremental_scan %}
+                    Last scan: {{ data.stats.last_incremental_scan[:19] | replace("T", " ") }} UTC
+                {% elif data.stats.last_full_scan %}
+                    Last scan: {{ data.stats.last_full_scan[:19] | replace("T", " ") }} UTC
+                {% else %}
+                    No scan has been run yet.
+                {% endif %}
+            </p>
+
+            {% if not scan_status.running %}
+            <form method="post" action="{{ url_for('scan_now') }}" class="scan-form">
+                <input type="submit" value="Scan Now" class="btn-scan">
+            </form>
+            {% endif %}
+        </div>
+
+        <!-- Visual Charts Row -->
+        <div class="charts-row">
+            <!-- Donut Chart: Codec Ratio -->
+            <div class="chart-card">
+                <h4>Codec Distribution</h4>
+                {% set total = data.stats.x264_count + data.stats.x265_count %}
+                {% if total > 0 %}
+                {% set x265_pct = ((data.stats.x265_count / total) * 100) | round(1) %}
+                {% set x264_pct = (100 - x265_pct) | round(1) %}
+                <div class="donut-chart" style="background: conic-gradient(#48bb78 0deg {{ (x265_pct * 3.6) | round }}deg, #ed8936 {{ (x265_pct * 3.6) | round }}deg 360deg);">
+                    <div class="donut-center">
+                        <span class="donut-value">{{ x265_pct }}%</span>
+                        <span class="donut-label">x265</span>
+                    </div>
+                </div>
+                <div class="chart-legend">
+                    <span class="legend-item"><span class="legend-dot x265"></span> x265 ({{ data.stats.x265_count }})</span>
+                    <span class="legend-item"><span class="legend-dot x264"></span> x264 ({{ data.stats.x264_count }})</span>
+                </div>
+                {% else %}
+                <p style="color: var(--text-muted);">No data available</p>
+                {% endif %}
+            </div>
+
+            <!-- Bar Chart: Size Comparison -->
+            <div class="chart-card">
+                <h4>Storage by Codec</h4>
+                {% set max_size = [data.stats.x264_size_gb, data.stats.x265_size_gb] | max %}
+                {% if max_size > 0 %}
+                <div class="bar-chart">
+                    <div class="bar-item">
+                        <span class="bar-label">x264</span>
+                        <div class="bar-track">
+                            <div class="bar-fill x264" style="width: {{ (data.stats.x264_size_gb / max_size * 100) | round }}%;">
+                                <span class="bar-value">{{ data.stats.x264_size_gb }} GB</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="bar-item">
+                        <span class="bar-label">x265</span>
+                        <div class="bar-track">
+                            <div class="bar-fill x265" style="width: {{ (data.stats.x265_size_gb / max_size * 100) | round }}%;">
+                                <span class="bar-value">{{ data.stats.x265_size_gb }} GB</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="bar-item">
+                        <span class="bar-label">Total</span>
+                        <div class="bar-track">
+                            <div class="bar-fill x265" style="width: 100%; background: var(--gradient-blue);">
+                                <span class="bar-value">{{ data.stats.total_size_gb }} GB</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% else %}
+                <p style="color: var(--text-muted);">No data available</p>
+                {% endif %}
+            </div>
+        </div>
+
+        {% else %}
+        <div class="stats-panel">
+            <p>No scan data available. Run a scan to populate recommendations.</p>
+            {% if not scan_status.running %}
+            <form method="post" action="{{ url_for('scan_now') }}" class="scan-form">
+                <input type="submit" value="Scan Now" class="btn-scan">
+            </form>
+            {% endif %}
+        </div>
+        {% endif %}
+
+        <!-- Film Recommendations -->
+        {% if data.films %}
+        <h3>Film Recommendations</h3>
+        <p class="section-description">Largest x264 films — these will benefit most from x265 conversion.</p>
+        <div class="table-container">
+            <table class="recommendations-table" id="films-table">
+                <thead>
+                    <tr>
+                        <th class="sortable" data-sort="text" onclick="sortTable('films-table', 0)">Title</th>
+                        <th class="sortable" data-sort="text" onclick="sortTable('films-table', 1)">Filename</th>
+                        <th class="sortable" data-sort="size" onclick="sortTable('films-table', 2)">Size</th>
+                        <th>Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for film in data.films %}
+                    <tr>
+                        <td>{{ film.title }}</td>
+                        <td>{{ film.filename }}</td>
+                        <td data-bytes="{{ film.size_bytes }}">{{ "%.2f"|format(film.size_bytes / (1024**3)) }} GB</td>
+                        <td>
+                            <button type="button" class="btn-transcode" onclick="showOptions('film-{{ loop.index }}')" {% if transcoder_running %}disabled{% endif %}>Transcode</button>
+                        </td>
+                    </tr>
+                    <tr class="options-row" id="film-{{ loop.index }}" style="display: none;">
+                        <td colspan="4">
+                            <form method="post" action="{{ url_for('run_from_recommendations') }}" class="transcode-options-form">
+                                <input type="hidden" name="folder" value="{{ film.directory }}">
+                                <div class="options-inline">
+                                    <div class="option-group">
+                                        <label>Quality (CQP):</label>
+                                        <input type="range" name="quality" min="18" max="25" step="1" value="23" oninput="this.nextElementSibling.textContent=this.value">
+                                        <span>23</span>
+                                    </div>
+                                    <div class="option-group">
+                                        <label>Delete originals:</label>
+                                        <select name="delete">
+                                            <option value="Yes" selected>Yes</option>
+                                            <option value="No">No</option>
+                                        </select>
+                                    </div>
+                                    <div class="option-group">
+                                        <input type="submit" value="Start" class="btn-transcode-confirm">
+                                        <button type="button" class="btn-cancel" onclick="hideOptions('film-{{ loop.index }}')">Cancel</button>
+                                    </div>
+                                </div>
+                            </form>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% endif %}
+
+        <!-- Show Recommendations -->
+        {% if data.shows %}
+        <h3>Show Season Recommendations</h3>
+        <p class="section-description">Largest x264 show seasons — transcode a full season for maximum space savings.</p>
+        <div class="table-container">
+            <table class="recommendations-table" id="shows-table">
+                <thead>
+                    <tr>
+                        <th class="sortable" data-sort="text" onclick="sortTable('shows-table', 0)">Show</th>
+                        <th class="sortable" data-sort="text" onclick="sortTable('shows-table', 1)">Season</th>
+                        <th class="sortable" data-sort="num" onclick="sortTable('shows-table', 2)">Episodes</th>
+                        <th>x264</th>
+                        <th class="sortable" data-sort="size" onclick="sortTable('shows-table', 4)">Total Size</th>
+                        <th>Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for show in data.shows %}
+                    <tr>
+                        <td>{{ show.title }}</td>
+                        <td>{{ show.season or "—" }}</td>
+                        <td>{{ show.total_episodes }}</td>
+                        <td>
+                            {% if show.x264_episodes == show.total_episodes %}
+                                <span class="badge-all-x264">All x264</span>
+                            {% else %}
+                                <span class="badge-partial-x264">{{ show.x264_episodes }} of {{ show.total_episodes }}</span>
+                            {% endif %}
+                        </td>
+                        <td data-bytes="{{ show.total_bytes }}">{{ "%.2f"|format(show.total_bytes / (1024**3)) }} GB</td>
+                        <td>
+                            <button type="button" class="btn-transcode" onclick="showOptions('show-{{ loop.index }}')" {% if transcoder_running %}disabled{% endif %}>Transcode</button>
+                        </td>
+                    </tr>
+                    <tr class="options-row" id="show-{{ loop.index }}" style="display: none;">
+                        <td colspan="6">
+                            <form method="post" action="{{ url_for('run_from_recommendations') }}" class="transcode-options-form">
+                                <input type="hidden" name="folder" value="{{ show.directory }}">
+                                <div class="options-inline">
+                                    <div class="option-group">
+                                        <label>Quality (CQP):</label>
+                                        <input type="range" name="quality" min="18" max="25" step="1" value="23" oninput="this.nextElementSibling.textContent=this.value">
+                                        <span>23</span>
+                                    </div>
+                                    <div class="option-group">
+                                        <label>Delete originals:</label>
+                                        <select name="delete">
+                                            <option value="Yes" selected>Yes</option>
+                                            <option value="No">No</option>
+                                        </select>
+                                    </div>
+                                    <div class="option-group">
+                                        <input type="submit" value="Start" class="btn-transcode-confirm">
+                                        <button type="button" class="btn-cancel" onclick="hideOptions('show-{{ loop.index }}')">Cancel</button>
+                                    </div>
+                                </div>
+                            </form>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% endif %}
+
+        {% if not data.films and not data.shows and data.stats %}
+        <p>No x264 content found — your library is fully transcoded.</p>
+        {% endif %}
+
+        <!-- Scan History -->
+        {% if scan_history %}
+        <h3>Scan History</h3>
+        <div class="table-container">
+            <table class="recommendations-table scan-history-table">
+                <thead>
+                    <tr>
+                        <th>Type</th>
+                        <th>Started</th>
+                        <th>Duration</th>
+                        <th>Files</th>
+                        <th>Added/Updated</th>
+                        <th>Removed</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for scan in scan_history %}
+                    <tr class="scan-row-{{ scan.status }}">
+                        <td>{{ scan.scan_type | capitalize }}</td>
+                        <td>{{ scan.started_at[:16] | replace("T", " ") }}</td>
+                        <td>
+                            {% if scan.duration_seconds %}
+                                {{ "%.1f"|format(scan.duration_seconds) }}s
+                            {% else %}
+                                —
+                            {% endif %}
+                        </td>
+                        <td>{{ scan.files_processed }}</td>
+                        <td>{{ scan.files_added }}</td>
+                        <td>{{ scan.files_removed }}</td>
+                        <td>
+                            {% if scan.status == "success" %}
+                                <span class="status-badge status-success">Success</span>
+                            {% elif scan.status == "failed" %}
+                                <span class="status-badge status-failed" title="{{ scan.error_message }}">Failed</span>
+                            {% elif scan.status == "running" %}
+                                <span class="status-badge status-running">Running</span>
+                            {% else %}
+                                {{ scan.status }}
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% endif %}
+    </div>
+
+    <script>
+        // Show/hide transcode options row
+        function showOptions(id) {
+            document.getElementById(id).style.display = 'table-row';
+        }
+        function hideOptions(id) {
+            document.getElementById(id).style.display = 'none';
+        }
+
+        // Simple client-side table sorting
+        const sortState = {};
+
+        function sortTable(tableId, colIndex) {
+            const table = document.getElementById(tableId);
+            const tbody = table.querySelector('tbody');
+            const rows = Array.from(tbody.querySelectorAll('tr:not(.options-row)'));
+            const header = table.querySelectorAll('th')[colIndex];
+            const sortType = header.getAttribute('data-sort');
+
+            const key = tableId + '_' + colIndex;
+            sortState[key] = !sortState[key];
+            const ascending = sortState[key];
+
+            rows.sort((a, b) => {
+                const cellA = a.cells[colIndex];
+                const cellB = b.cells[colIndex];
+
+                let valA, valB;
+                if (sortType === 'size') {
+                    valA = parseInt(cellA.getAttribute('data-bytes')) || 0;
+                    valB = parseInt(cellB.getAttribute('data-bytes')) || 0;
+                } else if (sortType === 'num') {
+                    valA = parseInt(cellA.textContent) || 0;
+                    valB = parseInt(cellB.textContent) || 0;
+                } else {
+                    valA = cellA.textContent.toLowerCase();
+                    valB = cellB.textContent.toLowerCase();
+                }
+
+                if (valA < valB) return ascending ? -1 : 1;
+                if (valA > valB) return ascending ? 1 : -1;
+                return 0;
+            });
+
+            // Re-append rows along with their associated options-row
+            rows.forEach(row => {
+                tbody.appendChild(row);
+                const nextRow = row.nextElementSibling;
+                if (nextRow && nextRow.classList.contains('options-row')) {
+                    tbody.appendChild(nextRow);
+                }
+            });
+        }
+
+        // Animate bar chart fills on load
+        document.addEventListener('DOMContentLoaded', function() {
+            const bars = document.querySelectorAll('.bar-fill');
+            bars.forEach(bar => {
+                const targetWidth = bar.style.width;
+                bar.style.width = '0%';
+                setTimeout(() => { bar.style.width = targetWidth; }, 100);
+            });
+        });
+    </script>
+</body>
+</html>

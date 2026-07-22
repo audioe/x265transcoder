@@ -24,7 +24,13 @@
 │                              └─────────────────────────────┘   │
 │                                                                 │
 │  ┌─────────────────────────────────────────────────────────┐   │
-│  │  modules/collector.py  (standalone scan utility)        │   │
+│  │  modules/scanner.py  (scheduled media inventory)        │   │
+│  │  APScheduler (nightly 04:00) + manual trigger           │   │
+│  │  writes ──► /config/media.db  (SQLite)                  │   │
+│  └─────────────────────────────────────────────────────────┘   │
+│                                                                 │
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │  modules/collector.py  (legacy scan utility — dormant)  │   │
 │  │  writes ──► /config/db.yaml                             │   │
 │  └─────────────────────────────────────────────────────────┘   │
 └─────────────────────────────────────────────────────────────────┘
@@ -49,7 +55,10 @@ The web front-end and job dispatcher. Responsibilities:
 - Serves the single-page UI via Jinja2 templates (`templates/index.html`).
 - Reads `/config/config.yaml` at startup for library paths and secrets.
 - Reads `/config/job.yaml` at startup and on every `GET /` request to surface live progress.
-- Provides four HTTP routes (see [Logical Processes](processes.md)).
+- Provides four HTTP routes plus `/recommendations`, `/scan_now`, `/scan_status`, and `/job_status` (see [Logical Processes](processes.md)).
+- Runs APScheduler with a nightly job (04:00) that triggers `modules/scanner.py` to scan both libraries.
+- Runs manual scans in a background thread to avoid blocking HTTP responses; exposes live scan progress via `GET /scan_status` (JSON).
+- Exposes live transcode job progress via `GET /job_status` (JSON), consumed by AJAX polling on the index page.
 - Detects whether a transcode job is already running by scanning the process list for `x265transcoder.py` via `ps aux`.
 - Spawns `x265transcoder.py` as a detached subprocess via `subprocess.Popen`, passing all job parameters as positional CLI arguments.
 - Writes initial `job_progress` and `file_progress` values to `/config/job.yaml` immediately after spawning the child process.
@@ -69,14 +78,47 @@ The transcode engine. Runs as a background process independent of the Flask app.
 - Sends a Telegram notification on job completion (success or failure summary).
 - Writes a structured log file to `/logs/transcode_<datetime>.log`.
 
+### modules/scanner.py
+
+The scheduled media inventory scanner. Replaces `collector.py` as the active library scanner. Responsibilities:
+
+- Performs a full scan on first run (when `/config/media.db` is absent or empty), walking both libraries and recording every `.mkv` file's codec, size, mtime, title, and season.
+- Performs incremental scans on subsequent runs — only processes files with changed mtime and removes records for deleted files.
+- Stores data in SQLite (`/config/media.db`) with WAL mode for safe concurrent reads from Flask.
+- Tracks live scan progress in thread-safe in-memory state (`get_scan_status()`), including current file, files processed, phase, and status message.
+- Records scan history in the `scan_history` table (type, duration, files processed/added/removed, success/failure).
+- Provides `get_recommendations()` which queries the DB for the largest x264 films (by individual file size) and largest x264 show seasons (by aggregate season size).
+- Provides `get_scan_history()` for the most recent scan records.
+- Triggered nightly at 04:00 via APScheduler, or manually via `POST /scan_now` (runs in background thread).
+
+### modules/history.py
+
+Transcode job history recorder. Responsibilities:
+
+- Stores per-file transcode results (original/new size, codec, quality, duration, status, failure reason) in the `transcode_files` table.
+- Stores per-job summaries (directory, timestamps, file counts, total space saved, quality, delete setting) in the `transcode_jobs` table.
+- Called by `x265transcoder.py` at job start (`start_job`), after each file (`record_file`), and at job end (`complete_job`).
+- Provides query functions for Flask: `get_job_history()`, `get_job_files()`, `get_lifetime_stats()`.
+- Uses the shared SQLite database at `/config/media.db` (same as `scanner.py`).
+
 ### modules/collector.py
 
-A standalone scan utility (not yet wired into the Flask routes). Responsibilities:
+A legacy standalone scan utility (superseded by `scanner.py` but retained for backward compatibility). Responsibilities:
 
 - Walks a directory tree and inventories all `.mkv` files.
 - Detects codec via `pymediainfo` and categorises files as `x264` or `x265`.
 - Writes a structured inventory to `/config/db.yaml` grouped by `category → codec → directory → filename: size_GB`.
 - Removes the alternate-codec entry for a directory when one side is found (prevents stale records after a successful transcode).
+
+### modules/encoder.py
+
+Hardware encoder detection and FFmpeg command builder. Responsibilities:
+
+- Auto-detects available hardware encoders by probing `vainfo` (Intel QSV / AMD VAAPI) and `nvidia-smi` (NVENC).
+- Resolves the active encoder from config (`auto`, `qsv`, `vaapi`, `nvenc`, `software`) or falls back to auto-detection.
+- Builds the complete FFmpeg command with encoder-specific flags (pixel format, rate control, presets, device paths).
+- Detection priority: Intel QSV → AMD VAAPI → NVIDIA NVENC → software (libx265).
+- Called by `x265transcoder.py` at startup to determine and log the active encoder.
 
 ### templates/index.html + static/
 
@@ -138,7 +180,7 @@ Browser  GET /  (every 5 s via meta-refresh)
         ▼
 flaskapp.py reads /config/job.yaml
         └─ passes job_progress, file_progress, current_file,
-           current_file_number, total_files to template
+           current_file_number, total_files, eta to template
         ▼
 index.html renders progress bars
 ```
@@ -159,6 +201,7 @@ Key fields written by `x265transcoder.py`:
 | `current_file_number` | int | 1-based index of current file |
 | `file_progress` | int 0–100 | Progress of the current file |
 | `job_progress` | int 0–100 | Overall job progress |
+| `eta` | string | Estimated time remaining for current file (e.g. "1h 23m"), empty when idle |
 
 ---
 
@@ -168,10 +211,13 @@ Key fields written by `x265transcoder.py`:
 |----------|--------|-----------|
 | Web framework | Flask | Lightweight; minimal overhead for a single-user internal tool |
 | Template engine | Jinja2 (bundled with Flask) | No separate build step required |
-| Hardware encoder | `hevc_qsv` via jellyfin-ffmpeg | Jellyfin's FFmpeg build bundles QSV support; avoids manual FFmpeg compilation |
+| Frontend UI | Dark theme, CSS-only charts, CSS animations | Modern look without JS frameworks; Inter font via Google Fonts; conic-gradient donut chart and animated bar charts for data visualization |
+| Hardware encoder | `hevc_qsv`, `hevc_vaapi`, `hevc_nvenc`, `libx265` via jellyfin-ffmpeg | Auto-detects Intel QSV, AMD VAAPI, NVIDIA NVENC; falls back to software. Configurable via `config.yaml` encoder field |
 | Progress tracking | `ffmpeg-progress-yield` | Parses FFmpeg stderr to yield per-frame % without custom regex |
 | Media analysis | `pymediainfo` (Python binding for libmediainfo) | More reliable than parsing `ffmpeg -i` output; works on all common containers |
 | Config format | YAML | Human-readable; supports the nested structure needed for libraries + secrets |
+| Media inventory DB | SQLite (`/config/media.db`) | Handles concurrent reads safely; efficient queries for recommendations; no external service needed |
+| Scheduled jobs | APScheduler (BackgroundScheduler) | Pure-Python, integrates directly with Flask; no external cron or task queue required |
 | IPC | Shared YAML file | Simple; avoids introducing a message queue or database dependency |
 | Notifications | Telegram Bot API | Low friction; no server-side listener required |
 | Containerisation | Docker | Encapsulates the Jellyfin FFmpeg dependency and Intel driver stack |

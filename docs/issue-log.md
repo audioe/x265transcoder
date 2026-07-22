@@ -15,6 +15,8 @@ Both the Flask process and the transcoder process read and write `/config/job.ya
 
 **Impact:** Corrupted YAML could cause the progress UI to crash on parse, or cause the transcoder to lose its job metadata.
 
+**Mitigation applied (2026-07-20):** The `index()` route now guards against `yaml.safe_load()` returning `None` (which happens when the file is read mid-write). The page gracefully shows "Loading..." and auto-refreshes. The underlying race condition (no file locking) remains unresolved.
+
 **Suggested fix:** Use `fcntl.flock()` (Linux) or a lock file alongside the YAML, or replace the shared-file IPC with a lightweight SQLite database or Redis instance.
 
 ---
@@ -48,13 +50,12 @@ Job detection is implemented by scanning `ps aux` output for the string `x265tra
 ### ISS-004 — `modules/collector.py` is not integrated into the UI
 **Type:** Improvement  
 **Severity:** Low  
-**Files:** `modules/collector.py`, `flaskapp.py`
+**Files:** `modules/collector.py`, `flaskapp.py`  
+**Status:** Resolved (superseded)
 
 The `collector.py` module scans the media library and writes a codec inventory to `/config/db.yaml`, but there are no Flask routes that call it or expose the data.
 
-**Impact:** The inventory database is never populated in normal usage. The feature is effectively dormant.
-
-**Suggested fix:** Add a background scan on startup (or a manual trigger route) and expose the inventory data on the home page to give users a view of what remains to be transcoded.
+**Resolution (2026-07-20):** The new `modules/scanner.py` fully supersedes `collector.py`. It performs scheduled (nightly at 04:00) and manual scans, stores results in SQLite (`/config/media.db`), and exposes library stats and recommendations via `GET /recommendations`. `collector.py` is retained for backward compatibility only and should not be extended.
 
 ---
 
@@ -95,11 +96,23 @@ The `folder`, `include`, `quality`, and `delete` values from the transcode submi
 
 ---
 
+### ISS-013 — `-x265-params` flag is ignored by `hevc_qsv` encoder
+**Type:** Bug  
+**Severity:** Low  
+**Files:** `x265transcoder.py`  
+**Status:** Resolved
+
+The FFmpeg command passes `-x265-params "repeat-headers=1:profile=main10:level=5.1"` which is a parameter for the **software** x265 encoder only. Since the project uses `hevc_qsv` (Intel Quick Sync hardware encoder), this flag is silently ignored by FFmpeg. The intended profile/level constraints are not being applied.
+
+**Resolution (2026-07-21):** Removed the dead `-x265-params` flag and its unused `params` variable. Replaced with QSV-native options: `-profile:v main10`, `-preset medium`, `-look_ahead 1`, `-look_ahead_depth 40`, `-adaptive_i 1`, `-adaptive_b 1`. These were already partially applied in a prior session; this session cleaned up the remaining dead code.
+
+---
+
 ### ISS-008 — FFmpeg binary path is hardcoded
 **Type:** Limitation  
-**Files:** `x265transcoder.py`
+**Files:** `modules/encoder.py`
 
-The FFmpeg binary path `/usr/lib/jellyfin-ffmpeg/ffmpeg` is hardcoded in the transcode command. If the Jellyfin FFmpeg package changes its install path or the container base changes, the transcoder will silently fail.
+The FFmpeg binary path `/usr/lib/jellyfin-ffmpeg/ffmpeg` is defined as `FFMPEG_PATH` in `modules/encoder.py`. It is now centralized in one place (previously hardcoded in `x265transcoder.py`), but still not configurable at runtime.
 
 **Suggested fix:** Make the FFmpeg path configurable via `config.yaml` or an environment variable with the current path as the default.
 
@@ -128,15 +141,82 @@ data = {'job_directory': job_data, 'progress': "0"}
 ### ISS-010 — Progress meta-refresh is not used for films jobs
 **Type:** Bug  
 **Severity:** Low  
-**Files:** `templates/index.html`
+**Files:** `templates/index.html`  
+**Status:** Resolved
 
 The auto-refresh `<meta>` tag is rendered when `transcoder_status == True`, but the "in progress" display branches on whether `"films"` appears in `job` (the `job_directory` value). The films branch does not display progress bars — it only shows the directory name. The progress bars are only shown in the shows branch, and only when `current_file` does not contain `"Loading"`. This may be intentional, but is undocumented.
+
+**Resolution (2026-07-20):** Rewrote `index.html` progress display. Both films and shows now show the same progress UI (current file, file/job progress bars). The `<meta refresh>` tag was also moved from `<body>` to `<head>` where it belongs.
 
 ---
 
 ## Resolved Issues
 
-No resolved issues recorded yet.
+### ISS-014 — Job history stuck in "Running" if Telegram notification fails
+**Type:** Bug  
+**Severity:** Medium  
+**Files:** `x265transcoder.py`  
+**Resolved:** 2026-07-21
+
+The `complete_job()` call was positioned **after** the `send_telegram_message()` calls at the end of `convert_job()`. If Telegram's API failed with an unhandled exception (timeout, DNS failure, network error), `complete_job()` was never reached, leaving the job record permanently in "running" status in the database.
+
+Additionally, the second `send_telegram_message` call had a broken indentation — it was outside the `if/else` block, causing the success message to always be sent regardless of whether failures occurred.
+
+**Fix applied:**
+- Moved `complete_job()` to execute **before** any Telegram notification attempts.
+- Fixed `send_telegram_message` indentation so success/failure messages are mutually exclusive.
+- Added missing `Successful.append(filetitle)` so the success list is actually populated.
+
+---
+
+### ISS-012 — QSV hardware decoder silently drops frames on certain streams
+**Type:** Bug  
+**Severity:** High  
+**Files:** `x265transcoder.py`  
+**Resolved:** 2026-07-21
+
+The FFmpeg command used `-c:v h264_qsv` to force QSV hardware decoding of the input stream. On certain files (e.g. IMAX variable aspect ratio, unusual NAL units, high-profile features), the QSV decoder silently dropped frames without raising errors, producing a truncated output that FFmpeg still reported as 100% complete. Post-transcode validation passed because the file was smaller and `pymediainfo` could still read it.
+
+**Root cause:** QSV hardware decoders have limited compatibility with complex H.264 streams compared to software decoders.
+
+**Fix applied:**
+- Removed `-c:v h264_qsv` input decoder flag. FFmpeg now uses software decoding (auto-selects correct decoder) for the input.
+- QSV is still used for the output encoder (`hevc_qsv`) where the performance benefit matters.
+- Also added `-map 0:s? -c:s copy` to preserve subtitle streams, and improved logging (full FFmpeg command now logged).
+
+---
+
+### ISS-011 — SQLite "database is locked" error on concurrent access
+**Type:** Bug  
+**Severity:** High  
+**Files:** `modules/scanner.py`  
+**Resolved:** 2026-07-20
+
+When the background scan thread held a write lock on `/config/media.db`, any concurrent request to `GET /recommendations` would also attempt to run `executescript` for schema initialisation, causing an immediate `sqlite3.OperationalError: database is locked`.
+
+**Root cause:** Schema initialisation via `executescript` (which requires an exclusive lock) was called on every `_get_connection()`, and connections had no busy timeout.
+
+**Fix applied:**
+- Schema initialisation (`_init_schema()`) is now a one-shot operation protected by a threading lock — runs once per process lifetime.
+- All `sqlite3.connect()` calls now pass `timeout=30` so readers wait for the write lock to release instead of failing immediately.
+
+---
+
+### ISS-015 — Duration validation uses fixed ±50ms tolerance causing false failures
+**Type:** Bug  
+**Severity:** Medium  
+**Files:** `x265transcoder.py`  
+**Resolved:** 2026-07-21
+
+The post-transcode duration check compared original and new file durations with a hard-coded ±50ms tolerance. For long files (e.g. 164 minutes), container remuxing and codec timestamp rounding routinely introduce ~1 second of drift in the duration metadata reported by `pymediainfo`. This caused valid transcodes to be flagged as failures despite the frame count check passing and the file playing back correctly.
+
+**Example:** The Dark Knight Rises (164.56 min) showed a 969ms duration difference — well within acceptable limits but 19× the old 50ms threshold.
+
+**Fix applied:**
+- Replaced the fixed ±50ms tolerance with a percentage-based tolerance of 0.015% of the original file duration.
+- For a 164-minute file this gives ~1,481ms of headroom; for a 30-minute episode ~270ms.
+- This aligns with the frame count check which already uses a percentage-based approach (0.11%).
+- Success log message now reports the calculated tolerance for transparency.
 
 ---
 
@@ -148,8 +228,9 @@ No resolved issues recorded yet.
 | IMP-002 | Fix `store_job` FileNotFoundError handler (ISS-009) | High |
 | IMP-003 | Remove or secure `/get_secret` endpoint (ISS-002) | High |
 | IMP-004 | Add file locking to job.yaml writes (ISS-001) | Medium |
-| IMP-005 | Wire `collector.py` into the UI as a library overview page | Medium |
+| IMP-005 | ~~Wire `collector.py` into the UI as a library overview page~~ — resolved by `modules/scanner.py` + `/recommendations` | ~~Medium~~ Done |
 | IMP-006 | Async directory size calculation (ISS-005) | Medium |
 | IMP-007 | Make FFmpeg path configurable (ISS-008) | Low |
 | IMP-008 | Add input validation on transcode form (ISS-007) | Medium |
 | IMP-009 | Replace `ps aux` job detection with PID file (ISS-003) | Low |
+| IMP-010 | ~~Fix dead `-x265-params` and optimise QSV encode settings (ISS-013)~~ | ~~Medium~~ Done |

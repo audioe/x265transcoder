@@ -9,9 +9,10 @@ This document describes the step-by-step flow of every major operation in the ap
 **File:** `flaskapp.py`
 
 1. Flask initialises and reads `version.txt` to load the version string.
-2. Checks for `/config/config.yaml`. If present, loads it into the `config` dict (libraries + secrets). If absent, sets `config_present = "False"` — note: this does not prevent startup but all library-dependent routes will fail.
+2. Checks for `/config/config.yaml`. If present, loads it into the `config` dict (libraries + secrets). If absent, redirects to `/setup`.
 3. Checks for `/config/job.yaml`. If present, reads `job_directory`, `job_progress`, and `file_progress` into module-level variables (used for template rendering on first load).
-4. Flask begins listening on `0.0.0.0:5000`.
+4. Initialises APScheduler `BackgroundScheduler` with a cron job (`scheduled_scan_job`) running daily at 04:00.
+5. Flask begins listening on `0.0.0.0:5000` with `use_reloader=False` (prevents duplicate scheduler instances).
 
 ---
 
@@ -21,8 +22,10 @@ This document describes the step-by-step flow of every major operation in the ap
 
 1. Calls `transcode_check('x265transcoder.py')` which runs `ps aux` and scans output for the keyword.
 2. **If a job is running:**
-   - Reads `/config/job.yaml` to get `job_directory`, `job_progress`, `file_progress`, `current_file`, `current_file_number`, `total_files`.
-   - Renders `index.html` in the "in progress" state, which injects a `<meta http-equiv="refresh" content="5">` tag to auto-reload every 5 seconds.
+   - Reads `/config/job.yaml` to get `job_directory`, `job_progress`, `file_progress`, `current_file`, `current_file_number`, `total_files`, `eta`.
+   - Renders `index.html` in the "in progress" state. The page uses AJAX polling (`fetch('/job_status')` every 4 seconds) to update progress values in-place without a full page reload.
+   - If `eta` is non-empty, displays the estimated time remaining for the current file in the progress meta grid.
+   - When the job finishes (detected via the `/job_status` response), the page does a single reload to show the idle state.
 3. **If no job is running:**
    - Renders `index.html` with the library-type selector form.
 
@@ -87,6 +90,8 @@ Triggered when the user selects a show from the directory list.
 2. Assigns all positional arguments to named variables.
 3. Initialises counters: `OldFolderSizeBytes`, `NewFolderSizeBytes`, `Successful`, `SuccessfulCount`, `Failed`, `FailedCount`, `SkippedCount`.
 4. Configures the Python logger to write to `/logs/transcode_<DD-MM-YY_HH-MM-SS>.log`.
+5. Reads `/config/config.yaml` to get the `encoder` setting (defaults to `auto` if absent).
+6. Calls `resolve_encoder()` which either uses the configured value or auto-detects hardware via `vainfo`/`nvidia-smi`. Logs the resolved encoder name.
 
 ### 6b. File Discovery
 
@@ -111,21 +116,23 @@ For each file in the list:
 
    d. Determines output filename: if `"264"` appears in the filename it is replaced with `"265"`; otherwise the original path is used as output.
 
-   e. Builds the `ffmpeg` command array targeting `/usr/lib/jellyfin-ffmpeg/ffmpeg` with:
-      - Input decoder: `h264_qsv` (hardware H.264 decode)
-      - Input: `file_path_old`
-      - Pixel format: `p010le` (10-bit)
+   e. Calls `build_ffmpeg_cmd()` from `modules/encoder.py` to construct the FFmpeg command for the resolved encoder. Common settings across all encoders:
+      - Input: `file_path_old` (software decode — no hardware input decoder)
       - Metadata: `title` set to the original filename
-      - Video streams: `0:0` mapped, encoded with `hevc_qsv`
-      - x265 params: `repeat-headers=1:profile=main10:level=5.1`
       - Audio streams: `0:a` mapped, copied without re-encoding
-      - Rate control: `CQP` with `global_quality` set to the user-supplied value
-      - Preset: `fast`
+      - Subtitle streams: `0:s?` mapped, copied
       - Stats period: 15 seconds
+
+      Encoder-specific settings:
+      - **Intel QSV:** `-c:v hevc_qsv`, profile main10, p010le pixel format, CQP rate control, lookahead, adaptive I/B frames, preset medium
+      - **AMD VAAPI:** `-c:v hevc_vaapi`, VAAPI device `/dev/dri/renderD128`, hwupload filter, profile main10, CQP rate control
+      - **NVIDIA NVENC:** `-c:v hevc_nvenc`, profile main10, p010le pixel format, constqp rate control, preset p5, b_ref_mode middle
+      - **Software:** `-c:v libx265`, yuv420p10le pixel format, CRF rate control, x265-params for profile/level, preset medium
 
    f. Wraps the command in `FfmpegProgress` and iterates progress events:
       - Writes `file_progress` percentage to `/config/job.yaml`.
       - Calculates and writes `job_progress` (weighted by position in total file list).
+      - Calculates estimated time remaining (ETA) from elapsed time and file progress percentage, writes to `eta` field in `/config/job.yaml`. Clears ETA when each file completes and at job end.
 
 ### 6d. Post-Transcode Validation
 
@@ -172,3 +179,213 @@ This module is not currently called from any Flask route — it is a standalone 
 A utility HTTP endpoint for fetching config secrets by key name. Returns the plain-text value from `config['secrets'][secret_name]`, or a 404 JSON error if the key is not found.
 
 Note: this endpoint is unauthenticated and should not be exposed on a public network.
+
+---
+
+## 9. Scheduled Media Scan (modules/scanner.py)
+
+**Trigger:** APScheduler cron job at 04:00 daily, or manual `POST /scan_now`
+
+### 9a. Scan Type Selection (`run_scan()`)
+
+1. Checks if `/config/media.db` exists.
+2. If absent, or if the `media_files` table is empty → runs a **full scan**.
+3. Otherwise → runs an **incremental scan**.
+
+### 9b. Full Scan (`full_scan()`)
+
+1. Opens SQLite connection to `/config/media.db` (creates schema if needed).
+2. Deletes all existing records from `media_files` (clean slate).
+3. For each configured library (`films`, `shows`):
+   - Walks the directory tree via `os.walk`.
+   - For each `.mkv` file:
+     - Gets file size and mtime from `os.stat`.
+     - Derives `title` and `season` from the relative path (see schema notes in architecture.md).
+     - Reads video codec via `pymediainfo`, normalises to `x264` / `x265` / raw format string.
+     - Inserts record into `media_files`.
+   - Commits in batches of 100 for efficiency.
+4. Updates `scan_state.last_full_scan` with the current UTC timestamp.
+
+### 9c. Incremental Scan (`incremental_scan()`)
+
+1. Builds an in-memory dict of all `.mkv` files currently on disk (filepath → metadata).
+2. Loads all existing DB records (filepath → mtime).
+3. **Deletions:** any filepath in DB but not on disk → DELETE from `media_files`.
+4. **Additions/Updates:** any filepath on disk where mtime differs from DB (or is new) → reads codec via pymediainfo and INSERT OR REPLACE.
+5. Updates `scan_state.last_incremental_scan`.
+
+### 9d. Scheduled Job Wrapper (`scheduled_scan_job()`)
+
+1. Calls `load_config()` to refresh library paths.
+2. Calls `run_scan(libraries)`.
+3. Logs success or failure.
+
+---
+
+## 10. Recommendations (GET /recommendations)
+
+**File:** `flaskapp.py → recommendations()`
+
+1. Calls `get_recommendations(limit=50)` from `modules/scanner.py`.
+2. Calls `get_scan_status()` for live scan progress (in-memory, thread-safe).
+3. Calls `get_scan_history(limit=10)` for recent scan records from the `scan_history` table.
+4. The recommendations function queries `/config/media.db`:
+   - **Films:** `SELECT title, filename, size_bytes, filepath FROM media_files WHERE category='films' AND codec='x264' ORDER BY size_bytes DESC LIMIT 50`
+   - **Shows:** `SELECT title, season, COUNT(*) as episode_count, SUM(size_bytes) as total_bytes FROM media_files WHERE category='shows' AND codec='x264' GROUP BY title, season ORDER BY total_bytes DESC LIMIT 50`
+   - **Stats:** aggregate counts and sizes for x264 vs x265, plus last scan timestamps.
+5. Renders `templates/recommendations.html` with recommendations data, scan status, and scan history.
+6. If a scan is currently running, the template includes `<meta http-equiv="refresh" content="3">` for auto-polling.
+
+---
+
+## 11. Manual Scan Trigger (POST /scan_now)
+
+**File:** `flaskapp.py → scan_now()`
+
+1. Checks if a scan is already running via `get_scan_status()`. If so, redirects back without starting a new one.
+2. Calls `load_config()` to get current library paths.
+3. Spawns `run_scan(libraries)` in a background `threading.Thread` (daemon=True) so the HTTP response returns immediately.
+4. Redirects to `GET /recommendations` — the page will show the in-progress status panel and auto-refresh.
+
+---
+
+## 12. Transcode from Recommendations (POST /run_from_recommendations)
+
+**File:** `flaskapp.py → run_from_recommendations()`
+
+1. Checks if a transcode job is already running via `transcode_check()`. If so, redirects back to `/recommendations`.
+2. Reads the `folder` from the POST body (set by the hidden input in each recommendation row's form).
+3. Uses default transcode settings: include `.mkv`, quality `23`, delete `Yes`.
+4. Fetches Telegram credentials from config.
+5. Calls `store_job(folder)` and spawns `x265transcoder.py` as a background process.
+6. Redirects to `GET /` where the progress UI is displayed.
+
+---
+
+## 13. Scan Status Polling (GET /scan_status)
+
+**File:** `flaskapp.py → scan_status_endpoint()`
+
+Returns a JSON object with the current scan state:
+
+```json
+{
+    "running": true,
+    "scan_type": "full",
+    "started_at": "2026-07-20T04:00:00+00:00",
+    "current_file": "movie.mkv",
+    "files_processed": 42,
+    "files_total": 200,
+    "phase": "scanning",
+    "message": "Scanning films library..."
+}
+```
+
+Used by the recommendations page meta-refresh (or optionally by JS fetch for finer-grained polling).
+
+---
+
+## 14. Job Status Polling (GET /job_status)
+
+**File:** `flaskapp.py → job_status_endpoint()`
+
+Returns a JSON object with the current transcode job state. Used by the index page's AJAX polling to update progress without full page reloads.
+
+```json
+{
+    "running": true,
+    "job_directory": "/films/hd/Interstellar",
+    "job_progress": "45",
+    "file_progress": "72",
+    "current_file": "Interstellar.mkv",
+    "current_file_number": "1",
+    "total_files": "1",
+    "eta": "32m"
+}
+```
+
+When `running` is `false`, the client reloads the page to render the idle state.
+
+---
+
+## 15. Transcode History Recording (modules/history.py)
+
+**Trigger:** Called by `x265transcoder.py` during job execution.
+
+### 14a. Job Start
+
+1. `start_job(directory, quality, delete_originals)` is called at the beginning of `x265transcoder.py`.
+2. Inserts a row into `transcode_jobs` with status `'running'`.
+3. Returns the `job_id` used to associate per-file records.
+
+### 14b. Per-File Recording
+
+After each file in the transcode loop, `record_file()` is called with one of three statuses:
+
+- **`"success"`** — file transcoded and validated. Records original/new sizes, quality, duration.
+- **`"failed"`** — file transcoded but failed validation (size, duration, or frame count mismatch). Records sizes, duration, and failure reason.
+- **`"skipped"`** — file is already x265. Records original size only.
+
+### 14c. Job Completion
+
+1. `complete_job()` is called after the transcode loop finishes.
+2. Updates the `transcode_jobs` row with: completed timestamp, file counts, total sizes, space saved, and final status (`"success"` or `"completed_with_failures"`).
+
+---
+
+## 15. History UI (GET /history, GET /history/<job_id>)
+
+**File:** `flaskapp.py → history()`, `history_detail()`
+
+### GET /history
+
+1. Calls `get_job_history(limit=20)` for recent jobs.
+2. Calls `get_lifetime_stats()` for all-time aggregates (total jobs, files transcoded, space saved, average compression %).
+3. Renders `templates/history.html` with job list and stats panel.
+
+### GET /history/<job_id>
+
+1. Calls `get_job_history()` to get the job list (for context).
+2. Calls `get_job_files(job_id)` for per-file detail of the selected job.
+3. Renders `templates/history.html` with the detail panel expanded, showing per-file results (filename, status, original/new size, space saved, duration).
+
+---
+
+## 16. Restart Job with Cleanup (POST /restart_job)
+
+**File:** `flaskapp.py → restart_job()`, `cleanup_interrupted_transcodes()`
+
+Handles the case where a transcode job was interrupted (container killed, crash, etc.) and partially processed files remain on disk.
+
+### 16a. Cleanup Phase (`cleanup_interrupted_transcodes(directory)`)
+
+1. Walks the target directory tree looking for files ending in `_old`.
+2. For each `*_old` file found:
+   - Determines the original filename by stripping the `_old` suffix.
+   - Determines the expected output filename (if original contained "264", the output would have "265" substituted; otherwise output = original name).
+   - Deletes the partial/incomplete output file if it exists on disk.
+   - Renames the `_old` file back to its original name.
+3. Returns the count of files restored.
+
+### 16b. Job Launch
+
+1. Checks if a transcode job is already running. If so, redirects back.
+2. Reads form fields: `folder`, `quality`, `delete`.
+3. Calls `cleanup_interrupted_transcodes(folder)` to restore any interrupted files.
+4. Fetches Telegram credentials and calls `store_job()`.
+5. Spawns `x265transcoder.py` and resets progress counters.
+6. Redirects to `GET /` to display progress.
+
+### File State Diagram
+
+```
+Interrupted state:
+  movie.mkv_old     (original x264 — intact)
+  movie.mkv         (partial x265 — incomplete)
+
+After cleanup:
+  movie.mkv         (original x264 — restored from _old)
+
+Transcoder runs:
+  Detects x264 codec → processes normally
+```

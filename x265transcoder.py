@@ -9,6 +9,8 @@ import re
 from pymediainfo import MediaInfo
 import logging
 from ffmpeg_progress_yield import FfmpegProgress
+from modules.history import start_job, record_file, complete_job
+from modules.encoder import resolve_encoder, build_ffmpeg_cmd, get_encoder_display_name
 
 if __name__ == '__main__':
     if len(sys.argv) < 3:
@@ -80,6 +82,19 @@ if __name__ == '__main__':
             yaml.dump(data, f, default_flow_style=False)
 
     # MAIN
+    # Detect or resolve encoder from config
+    encoder_config_value = None
+    try:
+        with open('/config/config.yaml', 'r') as f:
+            app_config = yaml.safe_load(f)
+            if app_config:
+                encoder_config_value = app_config.get('encoder', None)
+    except (FileNotFoundError, yaml.YAMLError):
+        pass
+
+    active_encoder = resolve_encoder(encoder_config_value)
+    logging.info(f"Encoder: {get_encoder_display_name(active_encoder)}")
+
     logging.info(f"Starting Script Version {Version}.  Working in {mediafolder}, and looking for {include}")
     if delete == "Yes":
         logging.info("Deleting files is enabled.")
@@ -144,8 +159,6 @@ if __name__ == '__main__':
         global quality
         global delete
         logging.info("Done.")
-        #For HW Encoding, use "-rc_mode CQP -global_quality 18" instead of crf
-        params = f"repeat-headers=1:profile=main10:level=5.1"
 
         total_files = len(file_list)
         store_job("total_files", total_files)
@@ -190,7 +203,7 @@ if __name__ == '__main__':
                 else:
                     outputfile = file_path
 
-                logging.info(f"Transcode config:   Quality={quality}")
+                logging.info(f"Transcode config:   Quality={quality}  Encoder={get_encoder_display_name(active_encoder)}")
                 #if "films" in mediafolder:
                 #    logging.info("We're encoding a film to 10 Bit, will add this to output file name")
                 #    outputfile = outputfile.replace('.mkv', '-10bit.mkv')
@@ -202,30 +215,21 @@ if __name__ == '__main__':
 
                 logging.info("Beginning transcode...")
                 starttime = datetime.now()
-                cmd = [
-                    "/usr/lib/jellyfin-ffmpeg/ffmpeg",
-                    "-c:v", "h264_qsv",
-                    "-i", f"{file_path}_old",
-                    "-pix_fmt", "p010le",
-                    "-map_chapters", "0",
-                    "-metadata", f"title={filetitle}",
-                    "-map", "0:0",  # Corrected placement of mapping
-                    "-c:v", "hevc_qsv",
-                    "-x265-params", f"{params}",
-                    "-map", "0:a",  # Corrected placement of mapping
-                    "-rc_mode", "CQP",
-                    "-global_quality", f"{quality}",
-                    "-c:a", "copy",
-                    "-preset", "fast",
-                    "-stats_period", "15",
-                    outputfile
-                ]
+                cmd = build_ffmpeg_cmd(
+                    input_path=f"{file_path}_old",
+                    output_path=outputfile,
+                    encoder=active_encoder,
+                    quality=quality,
+                    title=filetitle
+                )
 
+                logging.info(f"FFmpeg command: {' '.join(cmd)}")
                 process = FfmpegProgress(cmd)
                 
                 for file_progress_percentage in process.run_command_with_progress():
+                    file_progress_rounded = round(file_progress_percentage)
                     logging.debug(f"File Progress: {file_progress_percentage}%")
-                    update_progress_yaml("file_progress", file_progress_percentage)
+                    update_progress_yaml("file_progress", file_progress_rounded)
 
                     if progress_percentage == 0:
                         job_progress_percentage = round(((progress_percentage_next_step - progress_percentage)/100) * file_progress_percentage)
@@ -234,7 +238,24 @@ if __name__ == '__main__':
                             
                     logging.debug(f"Job Progress: {job_progress_percentage}%")
                     update_progress_yaml("job_progress", job_progress_percentage)
+
+                    # Calculate estimated time remaining for current file
+                    if file_progress_percentage > 0:
+                        elapsed = (datetime.now() - starttime).total_seconds()
+                        estimated_total = elapsed / (file_progress_percentage / 100)
+                        eta_seconds = max(0, estimated_total - elapsed)
+                        eta_hours = int(eta_seconds // 3600)
+                        eta_minutes = int((eta_seconds % 3600) // 60)
+                        if eta_hours > 0:
+                            eta_display = f"{eta_hours}h {eta_minutes}m"
+                        else:
+                            eta_display = f"{eta_minutes}m"
+                        update_progress_yaml("eta", eta_display)
+                    else:
+                        update_progress_yaml("eta", "Calculating...")
                     
+                # Clear ETA after file transcode completes
+                update_progress_yaml("eta", "")
                 newfilesizeinbytes = os.path.getsize(outputfile)
                 NewFolderSizeBytes += newfilesizeinbytes
                 newfilesize = round(newfilesizeinbytes / (1024*1024*1024), 2)
@@ -248,16 +269,28 @@ if __name__ == '__main__':
                     logging.error("ERROR: New file size is larger than original file size!")
                     logging.warning(f"New file Size: {newfilesize} GB  |  Original file Size: {filesize} GB")
                     jobfailed = filetitle
+                    Failed.append(jobfailed)
+                    logging.info("Adding job to failure list")
+                    FailedCount += 1
+                    # Record failed file in history (size check failed)
+                    category, title, season = derive_metadata(file_path, mediafolder)
+                    record_file(history_job_id, file_path, convertedname, "failed",
+                               category=category, title=title, season=season,
+                               original_size_bytes=filesizeinbytes, new_size_bytes=newfilesizeinbytes,
+                               original_codec="x264", quality=int(quality),
+                               duration_seconds=duration.total_seconds(),
+                               failure_reason="New file larger than original")
                 else:
                     logging.info("Confirmed new file is smaller than original")
                     #newfileduration = subprocess.check_output(['mediainfo', '--Inform=General;%Duration%', outputfile]).decode().strip()
                     newfileduration = get_video_duration(outputfile)
-                    if (int(newfileduration) <= int(fileduration) - 50) or (int(newfileduration) >= int(fileduration) + 50):
+                    duration_tolerance = int(fileduration) * 0.00015  # 0.015% of original duration
+                    if (int(newfileduration) <= int(fileduration) - duration_tolerance) or (int(newfileduration) >= int(fileduration) + duration_tolerance):
                         logging.error("ERROR: New file duration does not match original file Duration!")
                         logging.warning(f"New file Duration: {(newfileduration/60000):.2f} min ({newfileduration}) |  Original file Duration: {(fileduration/60000):.2f} min ({fileduration})")
                         jobfailed = filetitle
                     else:
-                        logging.info("Confirmed file durations match")
+                        logging.info(f"Confirmed file durations match (tolerance: {duration_tolerance:.0f}ms / 0.015%)")
 
                     #newfileframecount = subprocess.check_output(['mediainfo', '--Inform=Video;%FrameCount%', outputfile]).decode().strip()
                     newfileframecount = get_frame_count(outputfile)
@@ -281,13 +314,34 @@ if __name__ == '__main__':
                         Failed.append(jobfailed)
                         logging.info("Adding job to failure list")
                         FailedCount += 1
+                        # Record failed file in history
+                        category, title, season = derive_metadata(file_path, mediafolder)
+                        record_file(history_job_id, file_path, convertedname, "failed",
+                                   category=category, title=title, season=season,
+                                   original_size_bytes=filesizeinbytes, new_size_bytes=newfilesizeinbytes,
+                                   original_codec="x264", quality=int(quality),
+                                   duration_seconds=duration.total_seconds(),
+                                   failure_reason=jobfailed)
                     else:
                         SuccessfulCount += 1
+                        Successful.append(filetitle)
+                        # Record successful file in history
+                        category, title, season = derive_metadata(file_path, mediafolder)
+                        record_file(history_job_id, file_path, convertedname, "success",
+                                   category=category, title=title, season=season,
+                                   original_size_bytes=filesizeinbytes, new_size_bytes=newfilesizeinbytes,
+                                   original_codec="x264", quality=int(quality),
+                                   duration_seconds=duration.total_seconds())
 
             elif videocodec == "High Efficiency Video Coding" or videocodec == "HEVC":
                 logging.info("This is an x265 file.  Skipping")
                 NewFolderSizeBytes += filesizeinbytes
                 SkippedCount += 1
+                # Record skipped file in history
+                category, title, season = derive_metadata(file_path, mediafolder)
+                record_file(history_job_id, file_path, convertedname, "skipped",
+                           category=category, title=title, season=season,
+                           original_size_bytes=filesizeinbytes, original_codec="x265")
             
             progress_percentage = int((i + 1) / total_files * 100)
             logging.debug(f"Progress: {progress_percentage}%")
@@ -298,16 +352,43 @@ if __name__ == '__main__':
         folderpercdiff = round(((NewFolderSizeBytes/OldFolderSizeBytes)-1)*100, 2)
         TotalFiles = SuccessfulCount + FailedCount + SkippedCount
 
+        # Clear ETA now that the job is complete
+        update_progress_yaml("eta", "")
+
+        # Record job completion in history database (before Telegram, in case messaging fails)
+        complete_job(history_job_id, TotalFiles, SuccessfulCount, FailedCount, SkippedCount,
+                     OldFolderSizeBytes, NewFolderSizeBytes)
+
         if FailedCount > 0:
             logging.warning(f"Some Jobs May have Failed: {Failed}")
             logging.info("Sending Telegram Message...")
-            send_telegram_message (f"Transcode Job for {mediafolder} completed with failures.\n\n{SuccessfulCount} Succeeded | {FailedCount} Failed | {SkippedCount} Skipped\n\nThe following files failed verification: {Failed}")
+            send_telegram_message(f"Transcode Job for {mediafolder} completed with failures.\n\n{SuccessfulCount} Succeeded | {FailedCount} Failed | {SkippedCount} Skipped\n\nThe following files failed verification: {Failed}")
         else:
             logging.info(f"All Jobs Succeeded: {Successful}")
             logging.info("Sending Telegram Message...")
-        send_telegram_message (f"Transcode Job for {mediafolder} completed successfully.\n\n{SuccessfulCount} Succeeded | {SkippedCount} Skipped\n\nOriginal Directory Size: {oldfoldersize} GB\nNew Directory Size: {newfoldersize} GB\nSpace Saved: {folderpercdiff}%")
+            send_telegram_message(f"Transcode Job for {mediafolder} completed successfully.\n\n{SuccessfulCount} Succeeded | {SkippedCount} Skipped\n\nOriginal Directory Size: {oldfoldersize} GB\nNew Directory Size: {newfoldersize} GB\nSpace Saved: {folderpercdiff}%")
 
     logging.info("Done.")
+
+    # --- History tracking helpers ---
+    def derive_metadata(file_path, mediafolder):
+        """Derive category, title, and season from a file path."""
+        # Determine category from the mediafolder path
+        if "/films" in mediafolder.lower() or "\\films" in mediafolder.lower():
+            category = "films"
+        else:
+            category = "shows"
+
+        # Derive title and season from relative path
+        rel_path = os.path.relpath(file_path, mediafolder)
+        parts = rel_path.replace("\\", "/").split("/")
+        title = parts[0] if parts else os.path.basename(file_path)
+        season = parts[1] if category == "shows" and len(parts) > 2 else None
+        return category, title, season
+
+    # Start a history job record
+    history_job_id = start_job(mediafolder, quality, delete)
+    logging.info(f"History job ID: {history_job_id}")
 
     if file_list != []:
         #Run the Convert Job
@@ -315,3 +396,5 @@ if __name__ == '__main__':
         convert_job(file_list)
     else:
         logging.warning("file list is empty.  Is mediafolder and include criteria correct?")
+        # Complete the job with zero counts
+        complete_job(history_job_id, 0, 0, 0, 0, 0, 0)
