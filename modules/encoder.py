@@ -163,11 +163,7 @@ def build_ffmpeg_cmd(input_path, output_path, encoder, quality, title):
             "-profile:v", "main10",
             "-preset", "medium",
             "-rc_mode", "CQP",
-            "-global_quality", f"{quality}",
-            "-look_ahead", "1",
-            "-look_ahead_depth", "40",
-            "-adaptive_i", "1",
-            "-adaptive_b", "1",
+            "-global_quality", f"{quality}"
         ])
 
     elif encoder == ENCODER_VAAPI:
