@@ -190,11 +190,21 @@ def index():
         except:
             pass
 
+    # Get free space of /films
+    films_free_gb = 0
+    if os.path.exists('/films'):
+        try:
+            total, used, free = shutil.disk_usage('/films')
+            films_free_gb = free // (2**30)
+        except:
+            pass
+
     return render_template('index.html', version=version, os=os, config=config,
                            transcoder_status=transcoder_status, job_directory=job_directory,
                            job_progress=job_progress, file_progress=file_progress,
                            current_file_number=current_file_number, current_file=current_file,
                            total_files=total_files, eta=eta, dashboard_stats=dashboard_stats,
+                           films_free_gb=films_free_gb,
                            last_job_directory=last_job_directory, active_page='home')
 
 @app.route('/setup', methods=['GET', 'POST'])
@@ -543,6 +553,60 @@ def history_detail(job_id):
     return render_template('history.html', version=version, jobs=jobs, stats=stats,
                            selected_job=job, selected_files=files, active_page='history')
 
+
+# --- Logs Routes ---
+
+@app.route('/logs')
+def logs():
+    load_config()
+    log_dir = "/logs"
+    log_files = []
+    if os.path.exists(log_dir):
+        for f in os.listdir(log_dir):
+            if f.endswith('.log'):
+                path = os.path.join(log_dir, f)
+                log_files.append({
+                    'name': f,
+                    'path': path,
+                    'mtime': os.path.getmtime(path),
+                    'size': os.path.getsize(path)
+                })
+        log_files.sort(key=lambda x: x['mtime'], reverse=True)
+    return render_template('logs.html', version=version, log_files=log_files, active_page='logs')
+
+@app.route('/api/logs/latest')
+def api_logs_latest():
+    log_dir = "/logs"
+    if not os.path.exists(log_dir):
+        return jsonify({'error': 'Log directory not found', 'content': ''})
+    
+    log_files = [os.path.join(log_dir, f) for f in os.listdir(log_dir) if f.endswith('.log')]
+    if not log_files:
+        return jsonify({'error': 'No log files found', 'content': ''})
+        
+    latest_log = max(log_files, key=lambda f: os.path.getmtime(os.path.join(log_dir, f)))
+    
+    try:
+        with open(os.path.join(log_dir, latest_log), 'r', encoding='utf-8') as f:
+            lines = f.readlines()
+            # Return last 100 lines for live view
+            return jsonify({'content': ''.join(lines[-100:])})
+    except Exception as e:
+        return jsonify({'error': str(e), 'content': ''})
+
+@app.route('/api/logs/view/<log_file>')
+def api_logs_view(log_file):
+    log_dir = "/logs"
+    log_path = os.path.join(log_dir, log_file)
+    
+    if not os.path.exists(log_path):
+        return jsonify({'error': 'Log file not found', 'content': ''})
+        
+    try:
+        with open(log_path, 'r', encoding='utf-8') as f:
+            return jsonify({'content': f.read()})
+    except Exception as e:
+        return jsonify({'error': str(e), 'content': ''})
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', use_reloader=False)

@@ -16,6 +16,7 @@
             <a href="{{ url_for('index') }}" class="nav-link {% if active_page == 'home' %}active{% endif %}">Transcode</a>
             <a href="{{ url_for('recommendations') }}" class="nav-link {% if active_page == 'recommendations' %}active{% endif %}">Recommendations</a>
             <a href="{{ url_for('history') }}" class="nav-link {% if active_page == 'history' %}active{% endif %}">History</a>
+            <a href="{{ url_for('logs') }}" class="nav-link {% if active_page == 'logs' %}active{% endif %}">Logs</a>
             <a href="{{ url_for('setup') }}" class="nav-link nav-link-secondary">Settings</a>
         </div>
         <span class="nav-version">v{{ version }}</span>
@@ -50,6 +51,12 @@
                     <span class="meta-label">ETA</span>
                     <span class="meta-value meta-eta" id="meta-eta">{{ eta if eta else '—' }}</span>
                 </div>
+                {% if films_free_gb %}
+                <div class="progress-meta-item">
+                    <span class="meta-label">/films Free</span>
+                    <span class="meta-value">{{ films_free_gb }} GB</span>
+                </div>
+                {% endif %}
             </div>
 
             <div class="progress-current-file" id="current-file-display">
@@ -84,15 +91,20 @@
                 </div>
                 {% endif %}
             </div>
+
+            <div class="progress-log" id="progress-log" style="margin-top: 20px; background: #1e1e1e; border-radius: 6px; padding: 10px; height: 200px; overflow-y: auto; font-family: monospace; font-size: 12px; color: #ccc;">
+                <div id="live-log-content">Loading logs...</div>
+            </div>
         </div>
 
         <!-- Idle State -->
         {% else %}
 
         <!-- Dashboard summary (if scan data exists) -->
-        {% if dashboard_stats %}
+        {% if dashboard_stats or films_free_gb %}
         <div class="dashboard-summary">
             <div class="dashboard-cards">
+                {% if dashboard_stats %}
                 <div class="dashboard-card">
                     <span class="dashboard-value">{{ dashboard_stats.x264_count }}</span>
                     <span class="dashboard-label">x264 remaining</span>
@@ -105,6 +117,13 @@
                     <span class="dashboard-value">{{ dashboard_stats.x265_count }}</span>
                     <span class="dashboard-label">x265 complete</span>
                 </div>
+                {% endif %}
+                {% if films_free_gb %}
+                <div class="dashboard-card">
+                    <span class="dashboard-value">{{ films_free_gb }} GB</span>
+                    <span class="dashboard-label">/films Free</span>
+                </div>
+                {% endif %}
             </div>
         </div>
         {% endif %}
@@ -247,8 +266,29 @@
             const progressPanel = document.getElementById('progress-panel');
             if (progressPanel) {
                 setInterval(pollJobStatus, 4000);
+                setInterval(pollLogStatus, 4000);
+                pollLogStatus();
             }
         });
+
+        function pollLogStatus() {
+            fetch('/api/logs/latest')
+                .then(r => r.json())
+                .then(data => {
+                    const logContent = document.getElementById('live-log-content');
+                    if (logContent && data.content) {
+                        logContent.textContent = data.content;
+                        // auto scroll to bottom
+                        const logContainer = document.getElementById('progress-log');
+                        if (logContainer) {
+                            logContainer.scrollTop = logContainer.scrollHeight;
+                        }
+                    } else if (logContent && data.error) {
+                        logContent.textContent = "Log Error: " + data.error;
+                    }
+                })
+                .catch(err => console.warn('Log poll failed:', err));
+        }
 
         function pollJobStatus() {
             fetch('/job_status')
