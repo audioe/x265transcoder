@@ -67,14 +67,16 @@
                     <div class="options-inline" style="margin-top: 15px;">
                         <div class="option-group">
                             <label for="sched-quality">Quality (CQP):</label>
-                            <input type="range" id="sched-quality" name="quality" min="18" max="25" step="1" value="{{ config.get('quality', 23) if config else 23 }}" oninput="this.nextElementSibling.textContent=this.value">
-                            <span>{{ config.get('quality', 23) if config else 23 }}</span>
+                            {% set current_quality = schedule_config.quality if schedule_config else (window_info.quality if window_info else 23) %}
+                            <input type="range" id="sched-quality" name="quality" min="18" max="25" step="1" value="{{ current_quality }}" oninput="this.nextElementSibling.textContent=this.value">
+                            <span>{{ current_quality }}</span>
                         </div>
                         <div class="option-group">
                             <label for="sched-delete">Delete originals:</label>
+                            {% set current_delete = schedule_config.delete_originals if schedule_config else (window_info.delete_originals if window_info else 'Yes') %}
                             <select id="sched-delete" name="delete">
-                                <option value="Yes" selected>Yes</option>
-                                <option value="No">No</option>
+                                <option value="Yes" {% if current_delete == 'Yes' %}selected{% endif %}>Yes</option>
+                                <option value="No" {% if current_delete == 'No' %}selected{% endif %}>No</option>
                             </select>
                         </div>
                     </div>

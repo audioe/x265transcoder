@@ -388,6 +388,8 @@ def get_window_info(now_dt=None):
         "is_active": is_active,
         "start_time": cfg["start_time"],
         "end_time": cfg["end_time"],
+        "quality": cfg.get("quality", 23),
+        "delete_originals": cfg.get("delete_originals", "Yes"),
         "total_window_seconds": total_window_seconds,
         "remaining_seconds_in_window": remaining_seconds,
         "seconds_until_next_window": seconds_until_next,

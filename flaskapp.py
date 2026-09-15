@@ -709,11 +709,13 @@ def scheduler_view():
     transcoder_running = transcode_check('x265transcoder.py')
 
     queued_directories = {item['directory'] for item in estimates['queue']}
+    sched_cfg = get_schedule_config()
 
     return render_template(
         'scheduler.html',
         version=version,
         config=config,
+        schedule_config=sched_cfg,
         estimates=estimates,
         window_info=estimates['window_info'],
         queue=estimates['queue'],
