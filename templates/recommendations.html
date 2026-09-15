@@ -7,9 +7,6 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
-    {% if scan_status.running %}
-    <meta http-equiv="refresh" content="3">
-    {% endif %}
 </head>
 <body>
     <!-- Navigation -->
@@ -28,44 +25,31 @@
 
     <div class="container recommendations-container page-content">
 
-        <!-- Scan Status Panel (shown when scan is running or recently completed) -->
-        {% if scan_status.running %}
-        <div class="scan-status-panel scan-running">
-            <h3>Scan In Progress</h3>
-            <div class="scan-status-details">
-                <p class="scan-status-type">
-                    <strong>Type:</strong> {{ scan_status.scan_type | capitalize }} scan
-                </p>
-                <p class="scan-status-message">{{ scan_status.message }}</p>
-                {% if scan_status.current_file %}
-                <p class="scan-status-file">
-                    <strong>Current file:</strong> {{ scan_status.current_file }}
-                </p>
-                {% endif %}
-                <p class="scan-status-count">
-                    <strong>Files processed:</strong> {{ scan_status.files_processed }}
-                    {% if scan_status.files_total %}
-                     / {{ scan_status.files_total }}
-                    {% endif %}
-                </p>
-                {% if scan_status.files_total and scan_status.files_total > 0 %}
-                <div class="progress-container">
-                    <progress value="{{ scan_status.files_processed }}" max="{{ scan_status.files_total }}"></progress>
-                    <span class="progress-text">{{ ((scan_status.files_processed / scan_status.files_total) * 100) | int }}%</span>
+        <!-- Scan Status Panel (updated live via AJAX) -->
+        <div id="scan-status-container">
+            <div id="scan-status-panel" class="scan-status-panel {% if scan_status.running %}scan-running{% elif scan_status.phase == 'complete' %}scan-complete{% elif scan_status.phase == 'failed' %}scan-failed{% endif %}" {% if not scan_status.running and not scan_status.message %}style="display:none;"{% endif %}>
+                <h3 id="scan-heading">{% if scan_status.running %}Scan In Progress{% elif scan_status.phase == 'complete' %}Scan Complete{% elif scan_status.phase == 'failed' %}Scan Failed{% else %}Scan In Progress{% endif %}</h3>
+                <div class="scan-status-details" id="scan-status-details" {% if not scan_status.running %}style="display:none;"{% endif %}>
+                    <p class="scan-status-type">
+                        <strong>Type:</strong> <span id="scan-type-val">{% if scan_status.scan_type %}{{ scan_status.scan_type | capitalize }} scan{% else %}Library scan{% endif %}</span>
+                    </p>
+                    <p class="scan-status-message" id="scan-message-val">{{ scan_status.message or '' }}</p>
+                    <p class="scan-status-file" id="scan-file-row" {% if not scan_status.current_file %}style="display:none;"{% endif %}>
+                        <strong>Current file:</strong> <span id="scan-file-val">{{ scan_status.current_file or '' }}</span>
+                    </p>
+                    <p class="scan-status-count">
+                        <strong>Files processed:</strong> <span id="scan-count-val">{{ scan_status.files_processed or 0 }}{% if scan_status.files_total %} / {{ scan_status.files_total }}{% endif %}</span>
+                    </p>
+                    <div class="progress-container" id="scan-progress-container" {% if not scan_status.files_total or scan_status.files_total <= 0 %}style="display:none;"{% endif %}>
+                        <progress id="scan-progress-bar" value="{{ scan_status.files_processed or 0 }}" max="{{ scan_status.files_total or 100 }}"></progress>
+                        <span class="progress-text" id="scan-progress-pct">{% if scan_status.files_total and scan_status.files_total > 0 %}{{ ((scan_status.files_processed / scan_status.files_total) * 100) | int }}%{% else %}0%{% endif %}</span>
+                    </div>
                 </div>
-                {% endif %}
+                <div id="scan-static-message" {% if scan_status.running or not scan_status.message %}style="display:none;"{% endif %}>
+                    <p id="scan-static-message-val">{{ scan_status.message or '' }}</p>
+                </div>
             </div>
-            <p class="scan-status-hint">This page refreshes automatically every 3 seconds.</p>
         </div>
-        {% elif scan_status.phase == "complete" %}
-        <div class="scan-status-panel scan-complete">
-            <p>{{ scan_status.message }}</p>
-        </div>
-        {% elif scan_status.phase == "failed" %}
-        <div class="scan-status-panel scan-failed">
-            <p>{{ scan_status.message }}</p>
-        </div>
-        {% endif %}
 
         <!-- Library Statistics -->
         {% if data.stats %}
@@ -422,6 +406,172 @@
                 const targetWidth = bar.style.width;
                 bar.style.width = '0%';
                 setTimeout(() => { bar.style.width = targetWidth; }, 100);
+            });
+        });
+
+        // AJAX Scan Status Polling & Updates
+        let isScanRunning = {{ 'true' if scan_status.running else 'false' }};
+        let scanPollInterval = null;
+
+        function updateScanUI(status) {
+            const panel = document.getElementById('scan-status-panel');
+            const heading = document.getElementById('scan-heading');
+            const details = document.getElementById('scan-status-details');
+            const staticMsg = document.getElementById('scan-static-message');
+            const staticMsgVal = document.getElementById('scan-static-message-val');
+            const typeVal = document.getElementById('scan-type-val');
+            const msgVal = document.getElementById('scan-message-val');
+            const fileRow = document.getElementById('scan-file-row');
+            const fileVal = document.getElementById('scan-file-val');
+            const countVal = document.getElementById('scan-count-val');
+            const progressContainer = document.getElementById('scan-progress-container');
+            const progressBar = document.getElementById('scan-progress-bar');
+            const progressPct = document.getElementById('scan-progress-pct');
+            const scanBtns = document.querySelectorAll('.btn-scan');
+
+            if (!panel) return;
+
+            if (status.running) {
+                panel.style.display = 'block';
+                panel.className = 'scan-status-panel scan-running';
+                if (heading) heading.textContent = 'Scan In Progress';
+                if (details) details.style.display = 'block';
+                if (staticMsg) staticMsg.style.display = 'none';
+
+                if (typeVal && status.scan_type) {
+                    typeVal.textContent = status.scan_type.charAt(0).toUpperCase() + status.scan_type.slice(1) + ' scan';
+                }
+                if (msgVal && status.message) {
+                    msgVal.textContent = status.message;
+                }
+                if (fileRow && fileVal) {
+                    if (status.current_file) {
+                        fileRow.style.display = '';
+                        fileVal.textContent = status.current_file;
+                    } else {
+                        fileRow.style.display = 'none';
+                    }
+                }
+
+                if (status.files_total && status.files_total > 0) {
+                    if (countVal) countVal.textContent = (status.files_processed || 0) + ' / ' + status.files_total;
+                    if (progressContainer) progressContainer.style.display = '';
+                    if (progressBar) {
+                        progressBar.value = status.files_processed || 0;
+                        progressBar.max = status.files_total;
+                    }
+                    if (progressPct) {
+                        const pct = Math.round(((status.files_processed || 0) / status.files_total) * 100);
+                        progressPct.textContent = pct + '%';
+                    }
+                } else {
+                    if (countVal) countVal.textContent = (status.files_processed || 0);
+                    if (progressContainer) progressContainer.style.display = 'none';
+                }
+
+                scanBtns.forEach(btn => {
+                    btn.disabled = true;
+                    btn.style.opacity = '0.5';
+                    btn.style.cursor = 'not-allowed';
+                });
+            } else {
+                scanBtns.forEach(btn => {
+                    btn.disabled = false;
+                    btn.style.opacity = '';
+                    btn.style.cursor = '';
+                });
+            }
+        }
+
+        function pollScanStatus() {
+            fetch('{{ url_for("scan_status_endpoint") }}')
+                .then(res => res.json())
+                .then(status => {
+                    if (status.running) {
+                        isScanRunning = true;
+                        updateScanUI(status);
+                    } else if (isScanRunning && !status.running) {
+                        // Scan finished!
+                        isScanRunning = false;
+                        if (scanPollInterval) {
+                            clearInterval(scanPollInterval);
+                            scanPollInterval = null;
+                        }
+
+                        const panel = document.getElementById('scan-status-panel');
+                        const heading = document.getElementById('scan-heading');
+                        const details = document.getElementById('scan-status-details');
+                        const staticMsg = document.getElementById('scan-static-message');
+                        const staticMsgVal = document.getElementById('scan-static-message-val');
+
+                        if (panel) {
+                            panel.style.display = 'block';
+                            if (details) details.style.display = 'none';
+                            if (staticMsg) staticMsg.style.display = 'block';
+
+                            if (status.phase === 'complete') {
+                                panel.className = 'scan-status-panel scan-complete';
+                                if (heading) heading.textContent = 'Scan Complete';
+                                if (staticMsgVal) staticMsgVal.textContent = status.message || 'Scan completed successfully.';
+                            } else if (status.phase === 'failed') {
+                                panel.className = 'scan-status-panel scan-failed';
+                                if (heading) heading.textContent = 'Scan Failed';
+                                if (staticMsgVal) staticMsgVal.textContent = status.message || 'Scan failed.';
+                            }
+                        }
+
+                        // Refresh page once after a short delay so updated recommendations and stats appear
+                        setTimeout(() => {
+                            window.location.reload();
+                        }, 1200);
+                    }
+                })
+                .catch(err => console.error('Error polling scan status:', err));
+        }
+
+        function startScanPolling() {
+            if (!scanPollInterval) {
+                scanPollInterval = setInterval(pollScanStatus, 1500);
+            }
+        }
+
+        if (isScanRunning) {
+            startScanPolling();
+        }
+
+        // Intercept "Scan Now" form submissions for smooth in-page AJAX start
+        document.querySelectorAll('.scan-form').forEach(form => {
+            form.addEventListener('submit', function(e) {
+                e.preventDefault();
+                const submitBtn = form.querySelector('.btn-scan');
+                if (submitBtn) {
+                    submitBtn.disabled = true;
+                    submitBtn.style.opacity = '0.5';
+                    submitBtn.style.cursor = 'not-allowed';
+                }
+
+                isScanRunning = true;
+                updateScanUI({
+                    running: true,
+                    scan_type: 'library',
+                    message: 'Initiating scan...',
+                    files_processed: 0,
+                    files_total: null,
+                    current_file: null
+                });
+
+                fetch(form.action, {
+                    method: 'POST',
+                    headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' }
+                })
+                .then(res => res.json())
+                .then(data => {
+                    startScanPolling();
+                })
+                .catch(err => {
+                    console.error('Error starting scan:', err);
+                    startScanPolling();
+                });
             });
         });
     </script>

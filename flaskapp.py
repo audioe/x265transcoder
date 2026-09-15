@@ -563,7 +563,9 @@ def scan_now():
     """Trigger an immediate media library scan in a background thread."""
     scan_status = get_scan_status()
     if scan_status.get("running"):
-        # Already running — just redirect back
+        # Already running — return JSON if AJAX, otherwise redirect
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest' or request.is_json or 'application/json' in request.headers.get('Accept', ''):
+            return jsonify({'status': 'already_running', 'scan_status': scan_status})
         return redirect(url_for('recommendations'))
 
     load_config()
@@ -577,6 +579,9 @@ def scan_now():
 
     thread = threading.Thread(target=_run_in_background, daemon=True)
     thread.start()
+
+    if request.headers.get('X-Requested-With') == 'XMLHttpRequest' or request.is_json or 'application/json' in request.headers.get('Accept', ''):
+        return jsonify({'status': 'started'})
 
     return redirect(url_for('recommendations'))
 
