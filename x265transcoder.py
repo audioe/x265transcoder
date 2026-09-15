@@ -403,6 +403,24 @@ if __name__ == '__main__':
             logging.info("Sending Telegram Message...")
             send_telegram_message(f"Transcode Job for {mediafolder} completed successfully.\n\n{SuccessfulCount} Succeeded | {SkippedCount} Skipped\n\nOriginal Directory Size: {oldfoldersize} GB\nNew Directory Size: {newfoldersize} GB\nSpace Saved: {folderpercdiff}%")
 
+        # If job completed successfully, run an incremental recommendations scan to remove transcoded items
+        if FailedCount == 0 and not window_ended:
+            logging.info("Job finished successfully. Triggering incremental recommendations scan...")
+            try:
+                from modules.scanner import run_scan
+                scan_cfg = None
+                if os.path.exists('/config/config.yaml'):
+                    with open('/config/config.yaml', 'r') as f:
+                        scan_cfg = yaml.safe_load(f)
+                libs = (scan_cfg or {}).get('libraries', {})
+                if libs:
+                    run_scan(libs)
+                    logging.info("Incremental scan complete. Recommendations updated.")
+                else:
+                    logging.warning("No libraries configured in config.yaml; skipping post-transcode scan.")
+            except Exception as e:
+                logging.error(f"Post-transcode recommendations scan failed: {e}")
+
     logging.info("Done.")
 
     # --- History tracking helpers ---
