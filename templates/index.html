@@ -14,6 +14,7 @@
         <div class="nav-brand">x265 Transcoder</div>
         <div class="nav-links-bar">
             <a href="{{ url_for('index') }}" class="nav-link {% if active_page == 'home' %}active{% endif %}">Transcode</a>
+            <a href="{{ url_for('scheduler_view') }}" class="nav-link {% if active_page == 'scheduler' %}active{% endif %}">Scheduler</a>
             <a href="{{ url_for('recommendations') }}" class="nav-link {% if active_page == 'recommendations' %}active{% endif %}">Recommendations</a>
             <a href="{{ url_for('history') }}" class="nav-link {% if active_page == 'history' %}active{% endif %}">History</a>
             <a href="{{ url_for('logs') }}" class="nav-link {% if active_page == 'logs' %}active{% endif %}">Logs</a>
@@ -92,6 +93,26 @@
                 {% endif %}
             </div>
 
+            <!-- Scheduled Queue Items Display -->
+            <div class="transcode-queue-panel" id="transcode-queue-panel" {% if not now_transcoding and not upcoming_items %}style="display: none;"{% endif %}>
+                <div class="now-transcoding-block">
+                    <span class="queue-block-title">Now Transcoding:</span>
+                    <div class="now-transcoding-name" id="now-transcoding-name">{{ now_transcoding or (job_directory.split('/')[-1] if job_directory else '—') }}</div>
+                </div>
+
+                <div class="upcoming-items-block" id="upcoming-items-block" {% if not upcoming_items %}style="display: none;"{% endif %}>
+                    <span class="queue-block-title">Upcoming items:</span>
+                    <ul class="upcoming-items-list" id="upcoming-items-list">
+                        {% for u_item in upcoming_items %}
+                        <li class="upcoming-item-entry">
+                            <span class="upcoming-item-name">{{ u_item.name }}</span>
+                            {% if u_item.size %}<span class="upcoming-item-size">({{ u_item.size }})</span>{% endif %}
+                        </li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            </div>
+
             <div class="progress-log" id="progress-log" style="margin-top: 20px; background: #1e1e1e; border-radius: 6px; padding: 10px; height: 200px; overflow-y: auto; font-family: monospace; font-size: 12px; color: #ccc;">
                 <div id="live-log-content">Loading logs...</div>
             </div>
@@ -124,6 +145,28 @@
                     <span class="dashboard-label">/films Free</span>
                 </div>
                 {% endif %}
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Scheduled Queue Preview (Idle State) -->
+        {% if upcoming_items %}
+        <div class="scheduled-queue-idle-panel">
+            <div class="queue-idle-header">
+                <h4>Scheduled Job Queue ({{ upcoming_items|length }} upcoming)</h4>
+                <a href="{{ url_for('scheduler_view') }}" class="btn-scheduler-link">Open Scheduler &rarr;</a>
+            </div>
+            <p class="section-description">These items are queued and will begin automatically during the configured time window:</p>
+            <div class="upcoming-items-block" style="margin-top: 10px;">
+                <span class="queue-block-title">Upcoming items:</span>
+                <ul class="upcoming-items-list">
+                    {% for u_item in upcoming_items %}
+                    <li class="upcoming-item-entry">
+                        <span class="upcoming-item-name">{{ u_item.name }}</span>
+                        {% if u_item.size %}<span class="upcoming-item-size">({{ u_item.size }})</span>{% endif %}
+                    </li>
+                    {% endfor %}
+                </ul>
             </div>
         </div>
         {% endif %}
@@ -342,6 +385,31 @@
                         if (jobBar) jobBar.style.width = jobProgress + '%';
                         if (filePct) filePct.textContent = fileProgress + '%';
                         if (jobPct) jobPct.textContent = jobProgress + '%';
+                    }
+
+                    // Update Now Transcoding and Upcoming items queue
+                    const nowTitle = document.getElementById('now-transcoding-name');
+                    const queuePanel = document.getElementById('transcode-queue-panel');
+                    if (data.now_transcoding) {
+                        if (nowTitle) nowTitle.textContent = data.now_transcoding;
+                        if (queuePanel) queuePanel.style.display = 'block';
+                    }
+
+                    const upcomingBlock = document.getElementById('upcoming-items-block');
+                    const upcomingList = document.getElementById('upcoming-items-list');
+                    if (upcomingBlock && upcomingList) {
+                        if (data.upcoming_items && data.upcoming_items.length > 0) {
+                            upcomingBlock.style.display = 'block';
+                            if (queuePanel) queuePanel.style.display = 'block';
+                            upcomingList.innerHTML = data.upcoming_items.map(function(item) {
+                                return '<li class="upcoming-item-entry">' +
+                                    '<span class="upcoming-item-name">' + item.name + '</span>' +
+                                    (item.size ? ' <span class="upcoming-item-size">(' + item.size + ')</span>' : '') +
+                                    '</li>';
+                            }).join('');
+                        } else {
+                            upcomingBlock.style.display = 'none';
+                        }
                     }
                 })
                 .catch(err => console.warn('Poll failed:', err));

@@ -1550,3 +1550,497 @@ progress::-moz-progress-bar {
         font-size: 1.1em;
     }
 }
+
+/* ============================================
+   Scheduler & Queue UI Styles
+   ============================================ */
+
+.scheduler-container {
+    max-width: 1200px;
+    margin: 0 auto;
+}
+
+.scheduler-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+}
+
+@media (max-width: 900px) {
+    .scheduler-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+.scheduler-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-md);
+    padding: 24px;
+    box-shadow: var(--shadow-lg);
+    position: relative;
+    overflow: hidden;
+}
+
+.scheduler-card .card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+}
+
+.scheduler-card .card-header h3 {
+    margin: 0;
+    font-size: 1.2em;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.capacity-rate-badge {
+    background: rgba(99, 179, 237, 0.15);
+    color: var(--accent-blue);
+    border: 1px solid rgba(99, 179, 237, 0.3);
+    padding: 4px 10px;
+    border-radius: 20px;
+    font-size: 0.75em;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+}
+
+.pulse-badge {
+    animation: pulse 2s infinite;
+}
+
+.form-row-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: rgba(255, 255, 255, 0.03);
+    padding: 12px 16px;
+    border-radius: var(--radius-sm);
+    margin-bottom: 16px;
+    border: 1px solid var(--border-subtle);
+}
+
+.toggle-label {
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.form-row-times {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    background: rgba(0, 0, 0, 0.2);
+    padding: 16px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border-subtle);
+}
+
+.time-group {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.time-group label {
+    font-size: 0.85em;
+    color: var(--text-secondary);
+    font-weight: 500;
+}
+
+.time-group input[type="time"] {
+    background: var(--bg-secondary);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: var(--text-primary);
+    padding: 10px 14px;
+    border-radius: var(--radius-sm);
+    font-size: 1.1em;
+    font-weight: 600;
+    font-family: inherit;
+    outline: none;
+    transition: var(--transition);
+}
+
+.time-group input[type="time"]:focus {
+    border-color: var(--accent-blue);
+    box-shadow: 0 0 0 2px rgba(99, 179, 237, 0.2);
+}
+
+.time-arrow {
+    font-size: 1.4em;
+    color: var(--text-muted);
+    padding-top: 18px;
+}
+
+/* Estimation Metrics */
+.estimate-metrics {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+    margin: 16px 0;
+}
+
+.estimate-metric {
+    background: rgba(0, 0, 0, 0.2);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-sm);
+    padding: 12px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.metric-label {
+    font-size: 0.75em;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--text-muted);
+    font-weight: 600;
+}
+
+.metric-val {
+    font-size: 1.3em;
+    font-weight: 700;
+    color: var(--text-primary);
+}
+
+.metric-val.highlight {
+    color: var(--accent-blue);
+}
+
+.text-green {
+    color: var(--accent-green) !important;
+}
+
+.text-orange {
+    color: var(--accent-orange) !important;
+}
+
+.estimate-banner {
+    padding: 12px 16px;
+    border-radius: var(--radius-sm);
+    margin-top: 14px;
+    font-size: 0.9em;
+    line-height: 1.5;
+}
+
+.estimate-banner p {
+    margin: 0;
+}
+
+.banner-success {
+    background: rgba(72, 187, 120, 0.15);
+    border: 1px solid rgba(72, 187, 120, 0.3);
+    color: #9ae6b4;
+}
+
+.banner-warning {
+    background: rgba(237, 137, 54, 0.15);
+    border: 1px solid rgba(237, 137, 54, 0.3);
+    color: #fbd38d;
+}
+
+.banner-info {
+    background: rgba(99, 179, 237, 0.15);
+    border: 1px solid rgba(99, 179, 237, 0.3);
+    color: #bee3f8;
+}
+
+.window-policy-note {
+    margin-top: 12px;
+    color: var(--text-muted);
+    line-height: 1.4;
+}
+
+/* Queue Table & Badges */
+.scheduler-section {
+    background: var(--bg-card);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-md);
+    padding: 24px;
+    box-shadow: var(--shadow-lg);
+}
+
+.section-header-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 16px;
+}
+
+.section-header-bar h3, .section-header-bar h4 {
+    margin: 0;
+}
+
+.badge-running-transcoder {
+    background: rgba(72, 187, 120, 0.2);
+    color: var(--accent-green);
+    border: 1px solid rgba(72, 187, 120, 0.4);
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-size: 0.8em;
+    font-weight: 600;
+    animation: pulse 2s infinite;
+}
+
+.queue-table .order-col {
+    color: var(--text-muted);
+    text-align: center;
+}
+
+.queue-item-dir {
+    font-size: 0.75em;
+    color: var(--text-muted);
+    font-family: monospace;
+    margin-top: 2px;
+    max-width: 400px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.badge-type {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 0.75em;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+.badge-type.badge-films {
+    background: rgba(237, 137, 54, 0.2);
+    color: var(--accent-orange);
+    border: 1px solid rgba(237, 137, 54, 0.3);
+}
+
+.badge-type.badge-shows {
+    background: rgba(99, 179, 237, 0.2);
+    color: var(--accent-blue);
+    border: 1px solid rgba(99, 179, 237, 0.3);
+}
+
+.badge-season {
+    display: inline-block;
+    margin-left: 4px;
+    padding: 2px 6px;
+    background: rgba(255, 255, 255, 0.08);
+    color: var(--text-secondary);
+    border-radius: 4px;
+    font-size: 0.75em;
+}
+
+.fit-badge {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 12px;
+    font-size: 0.8em;
+    font-weight: 600;
+}
+
+.fit-yes {
+    background: rgba(72, 187, 120, 0.2);
+    color: #68d391;
+    border: 1px solid rgba(72, 187, 120, 0.4);
+}
+
+.fit-no {
+    background: rgba(237, 137, 54, 0.2);
+    color: #f6ad55;
+    border: 1px solid rgba(237, 137, 54, 0.4);
+}
+
+.status-queued {
+    background: rgba(255, 255, 255, 0.08);
+    color: var(--text-secondary);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+.queue-actions-inline {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.btn-order {
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid var(--border-subtle);
+    color: var(--text-primary);
+    padding: 4px 10px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-weight: bold;
+    transition: var(--transition);
+}
+
+.btn-order:hover:not(:disabled) {
+    background: var(--accent-blue);
+    color: #fff;
+}
+
+.btn-order:disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
+}
+
+.btn-queued {
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--text-muted);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    padding: 6px 14px;
+    border-radius: 4px;
+    font-size: 0.85em;
+    cursor: default;
+}
+
+.empty-queue-card {
+    padding: 32px;
+    text-align: center;
+    background: rgba(0, 0, 0, 0.15);
+    border: 1px dashed rgba(255, 255, 255, 0.1);
+    border-radius: var(--radius-sm);
+}
+
+.empty-queue-text {
+    color: var(--text-muted);
+    font-size: 0.95em;
+    margin: 0;
+}
+
+.form-row-custom {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+    align-items: flex-end;
+}
+
+.form-row-custom .input-group {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.form-row-custom .flex-2 { flex: 2; min-width: 250px; }
+.form-row-custom .flex-1 { flex: 1; min-width: 180px; }
+.form-row-custom .btn-align { align-self: flex-end; }
+
+/* ============================================
+   Transcode Tab — Queue Display Panel
+   ============================================ */
+
+.transcode-queue-panel {
+    background: rgba(0, 0, 0, 0.25);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-sm);
+    padding: 16px 20px;
+    margin-top: 18px;
+    animation: fadeInUp 0.4s ease-out;
+}
+
+.now-transcoding-block {
+    margin-bottom: 14px;
+}
+
+.queue-block-title {
+    display: block;
+    font-size: 0.8em;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    color: var(--text-muted);
+    font-weight: 700;
+    margin-bottom: 6px;
+}
+
+.now-transcoding-name {
+    font-size: 1.25em;
+    font-weight: 700;
+    color: var(--accent-green);
+    background: rgba(72, 187, 120, 0.1);
+    border: 1px solid rgba(72, 187, 120, 0.25);
+    padding: 8px 14px;
+    border-radius: var(--radius-sm);
+    display: inline-block;
+    word-break: break-word;
+}
+
+.upcoming-items-block {
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
+    padding-top: 12px;
+}
+
+.upcoming-items-list {
+    list-style: none;
+    padding: 0;
+    margin: 8px 0 0 0;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.upcoming-item-entry {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: rgba(255, 255, 255, 0.03);
+    padding: 8px 12px;
+    border-radius: 6px;
+    border: 1px solid rgba(255, 255, 255, 0.04);
+    font-size: 0.95em;
+}
+
+.upcoming-item-entry::before {
+    content: "•";
+    color: var(--accent-blue);
+    font-size: 1.4em;
+    line-height: 0;
+}
+
+.upcoming-item-name {
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.upcoming-item-size {
+    color: var(--text-muted);
+    font-size: 0.85em;
+    margin-left: auto;
+}
+
+/* Idle State Scheduled Queue Card */
+.scheduled-queue-idle-panel {
+    background: var(--bg-card);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-md);
+    padding: 24px;
+    margin-bottom: 24px;
+    box-shadow: var(--shadow-lg);
+}
+
+.queue-idle-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+}
+
+.queue-idle-header h4 {
+    margin: 0;
+    font-size: 1.15em;
+    color: var(--text-primary);
+}
+
+.btn-scheduler-link {
+    color: var(--accent-blue);
+    text-decoration: none;
+    font-size: 0.9em;
+    font-weight: 600;
+    transition: var(--transition);
+}
+
+.btn-scheduler-link:hover {
+    color: #90cdf4;
+    text-decoration: underline;
+}
+

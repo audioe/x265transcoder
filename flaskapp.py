@@ -8,6 +8,21 @@ import threading
 from apscheduler.schedulers.background import BackgroundScheduler
 from modules.scanner import run_scan, get_recommendations, get_scan_status, get_scan_history
 from modules.history import get_job_history, get_job_files, get_lifetime_stats
+from modules.scheduler import (
+    get_schedule_config,
+    save_schedule_config,
+    get_scheduled_queue,
+    get_all_scheduled_jobs,
+    add_to_queue,
+    remove_from_queue,
+    move_queue_item,
+    clear_completed_jobs,
+    get_next_queued_job,
+    mark_job_running,
+    is_in_schedule_window,
+    get_queue_estimates,
+    get_now_and_upcoming_display,
+)
 
 app = Flask(__name__)
 
@@ -199,13 +214,23 @@ def index():
         except:
             pass
 
+    # Get queue display info for scheduled jobs
+    display_info = get_now_and_upcoming_display(job_directory if transcoder_status else None)
+    now_transcoding = display_info.get("now_transcoding")
+    upcoming_items = display_info.get("upcoming_items", [])
+    is_scheduled_job = display_info.get("is_scheduled", False)
+
     return render_template('index.html', version=version, os=os, config=config,
                            transcoder_status=transcoder_status, job_directory=job_directory,
                            job_progress=job_progress, file_progress=file_progress,
                            current_file_number=current_file_number, current_file=current_file,
                            total_files=total_files, eta=eta, dashboard_stats=dashboard_stats,
                            films_free_gb=films_free_gb,
-                           last_job_directory=last_job_directory, active_page='home')
+                           last_job_directory=last_job_directory,
+                           now_transcoding=now_transcoding,
+                           upcoming_items=upcoming_items,
+                           is_scheduled_job=is_scheduled_job,
+                           active_page='home')
 
 @app.route('/setup', methods=['GET', 'POST'])
 def setup():
@@ -461,6 +486,61 @@ def scheduled_scan_job():
 # Initialise the background scheduler (runs daily at 04:00)
 scheduler = BackgroundScheduler(daemon=True)
 scheduler.add_job(scheduled_scan_job, 'cron', hour=4, minute=0, id='nightly_scan')
+
+
+# --- Scheduled Transcoder Worker ---
+
+def check_and_run_scheduled_jobs():
+    """Background check: if inside schedule window and idle, start next queued job."""
+    try:
+        # 1. Do not start if a transcode job is already running
+        if transcode_check('x265transcoder.py'):
+            return
+
+        # 2. Check if inside scheduled time window and scheduler is enabled
+        if not is_in_schedule_window():
+            return
+
+        # 3. Get next queued job
+        next_job = get_next_queued_job()
+        if not next_job:
+            return
+
+        job_id = next_job['id']
+        folder = next_job['directory']
+        quality = str(next_job.get('quality', 23))
+        delete = next_job.get('delete_originals', 'Yes')
+        include = '.mkv'
+
+        load_config()
+        telegram_token = get_secret("TELEGRAM_TOKEN")
+        telegram_chatid = get_secret("TELEGRAM_CHATID")
+
+        # Mark job running in SQLite database
+        mark_job_running(job_id)
+
+        # Store job data in /config/job.yaml
+        store_job(folder)
+        update_progress_yaml("job_progress", 0)
+        update_progress_yaml("file_progress", 0)
+        update_progress_yaml("scheduled_job_id", str(job_id))
+        update_progress_yaml("scheduled_item_name", next_job['item_name'])
+
+        # Launch x265transcoder with scheduled_job_id as the 8th argument
+        subprocess.Popen([
+            'python', 'x265transcoder.py',
+            folder, include, quality, delete,
+            str(telegram_token), str(telegram_chatid), version,
+            str(job_id)
+        ])
+        scheduler_logger.info(f"Started scheduled transcode job #{job_id}: {next_job['item_name']} ({folder})")
+
+    except Exception as e:
+        scheduler_logger.error(f"Error checking/starting scheduled job: {e}")
+
+
+# Run scheduler check every 15 seconds
+scheduler.add_job(check_and_run_scheduled_jobs, 'interval', seconds=15, id='transcode_scheduler')
 scheduler.start()
 
 
@@ -512,21 +592,30 @@ def job_status_endpoint():
     """JSON endpoint for polling transcode job progress."""
     transcoder_status = transcode_check('x265transcoder.py')
     result = {'running': transcoder_status}
+    job_directory = ''
     if transcoder_status:
         try:
             with open('/config/job.yaml', 'r') as f:
                 job_config = yaml.safe_load(f)
             if job_config is None:
                 job_config = {}
-            result['job_directory'] = job_config.get('job_directory', '')
+            job_directory = job_config.get('job_directory', '')
+            result['job_directory'] = job_directory
             result['job_progress'] = job_config.get('job_progress', '0')
             result['file_progress'] = job_config.get('file_progress', '0')
             result['current_file'] = job_config.get('current_file', '')
             result['current_file_number'] = job_config.get('current_file_number', '')
             result['total_files'] = job_config.get('total_files', '')
             result['eta'] = job_config.get('eta', '')
+            result['scheduled_job_id'] = job_config.get('scheduled_job_id', '')
+            result['scheduled_item_name'] = job_config.get('scheduled_item_name', '')
         except Exception:
             pass
+
+    display_info = get_now_and_upcoming_display(job_directory if transcoder_status else None)
+    result['now_transcoding'] = display_info.get("now_transcoding", "")
+    result['upcoming_items'] = display_info.get("upcoming_items", [])
+    result['is_scheduled'] = display_info.get("is_scheduled", False)
     return jsonify(result)
 
 
@@ -607,6 +696,94 @@ def api_logs_view(log_file):
             return jsonify({'content': f.read()})
     except Exception as e:
         return jsonify({'error': str(e), 'content': ''})
+
+
+# --- Scheduler Routes ---
+
+@app.route('/scheduler')
+def scheduler_view():
+    load_config()
+    estimates = get_queue_estimates()
+    all_jobs = get_all_scheduled_jobs(limit=20)
+    recommendations_data = get_recommendations(limit=100)
+    transcoder_running = transcode_check('x265transcoder.py')
+
+    queued_directories = {item['directory'] for item in estimates['queue']}
+
+    return render_template(
+        'scheduler.html',
+        version=version,
+        config=config,
+        estimates=estimates,
+        window_info=estimates['window_info'],
+        queue=estimates['queue'],
+        all_jobs=all_jobs,
+        recommendations=recommendations_data,
+        queued_directories=queued_directories,
+        transcoder_running=transcoder_running,
+        active_page='scheduler'
+    )
+
+
+@app.route('/scheduler/config', methods=['POST'])
+def scheduler_save_config_route():
+    enabled = request.form.get('enabled') == 'on' or request.form.get('enabled') == '1'
+    start_time = request.form.get('start_time', '22:00')
+    end_time = request.form.get('end_time', '06:00')
+    quality = int(request.form.get('quality', 23))
+    delete_originals = request.form.get('delete', 'Yes')
+    save_schedule_config(
+        enabled=enabled,
+        start_time=start_time,
+        end_time=end_time,
+        quality=quality,
+        delete_originals=delete_originals
+    )
+    return redirect(url_for('scheduler_view'))
+
+
+@app.route('/scheduler/add', methods=['POST'])
+def scheduler_add_job_route():
+    directory = request.form.get('directory', '').strip()
+    item_name = request.form.get('item_name', '').strip() or os.path.basename(directory.rstrip('/\\'))
+    category = request.form.get('category', 'films')
+    season = request.form.get('season') or None
+    quality = request.form.get('quality')
+    delete = request.form.get('delete')
+    total_files = int(request.form.get('total_files', 0) or 0)
+    estimated_size_bytes = int(request.form.get('estimated_size_bytes', 0) or 0)
+
+    if directory:
+        add_to_queue(
+            directory=directory,
+            item_name=item_name,
+            category=category,
+            season=season,
+            quality=int(quality) if quality else None,
+            delete_originals=delete if delete else None,
+            total_files=total_files,
+            estimated_size_bytes=estimated_size_bytes
+        )
+    return redirect(url_for('scheduler_view'))
+
+
+@app.route('/scheduler/remove/<int:job_id>', methods=['POST'])
+def scheduler_remove_job_route(job_id):
+    remove_from_queue(job_id)
+    return redirect(url_for('scheduler_view'))
+
+
+@app.route('/scheduler/reorder/<int:job_id>/<string:direction>', methods=['POST'])
+def scheduler_reorder_job_route(job_id, direction):
+    move_queue_item(job_id, direction)
+    return redirect(url_for('scheduler_view'))
+
+
+@app.route('/scheduler/clear_completed', methods=['POST'])
+def scheduler_clear_completed_route():
+    clear_completed_jobs()
+    return redirect(url_for('scheduler_view'))
+
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', use_reloader=False)

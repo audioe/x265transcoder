@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>x265 Transcoder - Scheduler</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+</head>
+<body>
+    <!-- Navigation -->
+    <nav class="main-nav">
+        <div class="nav-brand">x265 Transcoder</div>
+        <div class="nav-links-bar">
+            <a href="{{ url_for('index') }}" class="nav-link {% if active_page == 'home' %}active{% endif %}">Transcode</a>
+            <a href="{{ url_for('scheduler_view') }}" class="nav-link {% if active_page == 'scheduler' %}active{% endif %}">Scheduler</a>
+            <a href="{{ url_for('recommendations') }}" class="nav-link {% if active_page == 'recommendations' %}active{% endif %}">Recommendations</a>
+            <a href="{{ url_for('history') }}" class="nav-link {% if active_page == 'history' %}active{% endif %}">History</a>
+            <a href="{{ url_for('logs') }}" class="nav-link {% if active_page == 'logs' %}active{% endif %}">Logs</a>
+            <a href="{{ url_for('setup') }}" class="nav-link nav-link-secondary">Settings</a>
+        </div>
+        <span class="nav-version">v{{ version }}</span>
+    </nav>
+
+    <div class="container page-content scheduler-container">
+
+        <!-- Top Overview & Config Grid -->
+        <div class="scheduler-grid">
+            <!-- Schedule Window Configuration Card -->
+            <div class="scheduler-card config-card">
+                <div class="card-header">
+                    <h3>Time Window Configuration</h3>
+                    {% if window_info.enabled %}
+                        {% if window_info.is_active %}
+                            <span class="status-badge status-success pulse-badge">Active Window</span>
+                        {% else %}
+                            <span class="status-badge status-running">Enabled</span>
+                        {% endif %}
+                    {% else %}
+                        <span class="status-badge status-muted">Disabled</span>
+                    {% endif %}
+                </div>
+                <p class="section-description">Set the time window when transcoding jobs are allowed to run.</p>
+
+                <form method="post" action="{{ url_for('scheduler_save_config_route') }}" class="scheduler-config-form">
+                    <div class="form-row-toggle">
+                        <label for="sched-enabled" class="toggle-label">Enable Scheduled Transcoding:</label>
+                        <label class="switch">
+                            <input type="checkbox" id="sched-enabled" name="enabled" value="1" {% if window_info.enabled %}checked{% endif %}>
+                            <span class="slider round"></span>
+                        </label>
+                    </div>
+
+                    <div class="form-row-times">
+                        <div class="time-group">
+                            <label for="start_time">Start Time</label>
+                            <input type="time" id="start_time" name="start_time" value="{{ window_info.start_time }}" required>
+                        </div>
+                        <div class="time-arrow">&rarr;</div>
+                        <div class="time-group">
+                            <label for="end_time">End Time</label>
+                            <input type="time" id="end_time" name="end_time" value="{{ window_info.end_time }}" required>
+                        </div>
+                    </div>
+
+                    <div class="options-inline" style="margin-top: 15px;">
+                        <div class="option-group">
+                            <label for="sched-quality">Quality (CQP):</label>
+                            <input type="range" id="sched-quality" name="quality" min="18" max="25" step="1" value="{{ config.get('quality', 23) if config else 23 }}" oninput="this.nextElementSibling.textContent=this.value">
+                            <span>{{ config.get('quality', 23) if config else 23 }}</span>
+                        </div>
+                        <div class="option-group">
+                            <label for="sched-delete">Delete originals:</label>
+                            <select id="sched-delete" name="delete">
+                                <option value="Yes" selected>Yes</option>
+                                <option value="No">No</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="form-actions" style="margin-top: 18px;">
+                        <input type="submit" value="Save Schedule Settings" class="btn-primary">
+                    </div>
+                </form>
+            </div>
+
+            <!-- Capacity & Fit Estimation Card -->
+            <div class="scheduler-card estimate-card">
+                <div class="card-header">
+                    <h3>Upcoming Window Estimate</h3>
+                    <span class="capacity-rate-badge">{{ estimates.speed_gb_hr }} GB/h avg</span>
+                </div>
+                <p class="section-description">{{ window_info.status_text }}</p>
+
+                <div class="estimate-metrics">
+                    <div class="estimate-metric">
+                        <span class="metric-label">Window Duration</span>
+                        <span class="metric-val">{{ "%.1f"|format(estimates.available_seconds / 3600) }} hrs</span>
+                    </div>
+                    <div class="estimate-metric">
+                        <span class="metric-label">Est. Window Capacity</span>
+                        <span class="metric-val highlight">{{ estimates.capacity_gb }} GB</span>
+                    </div>
+                    <div class="estimate-metric">
+                        <span class="metric-label">Items in Queue</span>
+                        <span class="metric-val">{{ estimates.total_items_count }}</span>
+                    </div>
+                    <div class="estimate-metric">
+                        <span class="metric-label">Estimated to Fit</span>
+                        <span class="metric-val {% if estimates.items_fitting_count > 0 %}text-green{% else %}text-orange{% endif %}">
+                            {{ estimates.items_fitting_count }} / {{ estimates.total_items_count }}
+                        </span>
+                    </div>
+                </div>
+
+                <div class="estimate-banner {% if estimates.items_fitting_count == estimates.total_items_count and estimates.total_items_count > 0 %}banner-success{% elif estimates.items_fitting_count > 0 %}banner-warning{% else %}banner-info{% endif %}">
+                    <p>{{ estimates.summary_text }}</p>
+                </div>
+
+                <div class="window-policy-note">
+                    <small>&bull; When the window closes, active transcodes will finish the current file and automatically queue any outstanding files for the next window.</small>
+                </div>
+            </div>
+        </div>
+
+        <!-- Job Queue Section -->
+        <div class="scheduler-section" style="margin-top: 30px;">
+            <div class="section-header-bar">
+                <h3>Job Queue ({{ queue|length }})</h3>
+                {% if transcoder_running %}
+                    <span class="badge-running-transcoder">Transcoder Running Live</span>
+                {% endif %}
+            </div>
+
+            {% if queue %}
+            <div class="table-container">
+                <table class="recommendations-table queue-table">
+                    <thead>
+                        <tr>
+                            <th style="width: 50px;">Order</th>
+                            <th>Item Name</th>
+                            <th>Type</th>
+                            <th>Size</th>
+                            <th>Est. Time</th>
+                            <th>Window Fit</th>
+                            <th>Status</th>
+                            <th style="width: 140px;">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in queue %}
+                        <tr class="{% if item.status == 'running' %}row-running{% endif %}">
+                            <td class="order-col"><strong>#{{ loop.index }}</strong></td>
+                            <td>
+                                <strong>{{ item.item_name }}</strong>
+                                <div class="queue-item-dir">{{ item.directory }}</div>
+                            </td>
+                            <td>
+                                <span class="badge-type badge-{{ item.category }}">{{ item.category | capitalize }}</span>
+                                {% if item.season %}<span class="badge-season">{{ item.season }}</span>{% endif %}
+                            </td>
+                            <td>{{ item.size_gb }} GB</td>
+                            <td>{{ item.estimated_duration_formatted }}</td>
+                            <td>
+                                {% if item.status == 'running' %}
+                                    <span class="status-badge status-running">Transcoding Now</span>
+                                {% elif item.will_fit %}
+                                    <span class="fit-badge fit-yes" title="Fits in upcoming window">&#10004; Will Fit</span>
+                                {% else %}
+                                    <span class="fit-badge fit-no" title="Will carry over to next window">&#9654; Next Window</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if item.status == 'running' %}
+                                    <span class="status-badge status-running">Running</span>
+                                {% elif item.status == 'paused' %}
+                                    <span class="status-badge status-warning">Paused</span>
+                                {% else %}
+                                    <span class="status-badge status-queued">Queued</span>
+                                {% endif %}
+                            </td>
+                            <td class="action-buttons">
+                                <div class="queue-actions-inline">
+                                    <form method="post" action="{{ url_for('scheduler_reorder_job_route', job_id=item.id, direction='up') }}" style="display:inline;">
+                                        <button type="submit" class="btn-order" {% if loop.first or item.status == 'running' %}disabled{% endif %} title="Move Up">&uarr;</button>
+                                    </form>
+                                    <form method="post" action="{{ url_for('scheduler_reorder_job_route', job_id=item.id, direction='down') }}" style="display:inline;">
+                                        <button type="submit" class="btn-order" {% if loop.last or item.status == 'running' %}disabled{% endif %} title="Move Down">&darr;</button>
+                                    </form>
+                                    <form method="post" action="{{ url_for('scheduler_remove_job_route', job_id=item.id) }}" style="display:inline;" onsubmit="return confirm('Remove {{ item.item_name }} from queue?');">
+                                        <button type="submit" class="btn-cancel" {% if item.status == 'running' %}disabled{% endif %} title="Remove from Queue">&times;</button>
+                                    </form>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="empty-queue-card">
+                <p class="empty-queue-text">No items in queue. Browse recommendations or add custom items below to schedule transcoding.</p>
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- Add Items Section -->
+        <div class="scheduler-section" style="margin-top: 40px;">
+            <div class="section-tabs-bar">
+                <h3>Select Items to Schedule</h3>
+            </div>
+
+            <!-- TV Shows Recommendations for Queue -->
+            {% if recommendations.shows %}
+            <h4 style="margin-top: 20px; color: var(--accent-blue);">TV Show Seasons (x264)</h4>
+            <p class="section-description">Select full seasons to add to the transcoding schedule.</p>
+            <div class="table-container">
+                <table class="recommendations-table">
+                    <thead>
+                        <tr>
+                            <th>Show</th>
+                            <th>Season</th>
+                            <th>Episodes</th>
+                            <th>x264</th>
+                            <th>Total Size</th>
+                            <th>Est. Duration</th>
+                            <th style="width: 140px;">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for show in recommendations.shows %}
+                        {% set is_queued = show.directory in queued_directories %}
+                        {% set est_dur_mins = ((show.total_bytes / estimates.speed_bps) / 60) | round | int %}
+                        {% set est_h = (est_dur_mins // 60) %}
+                        {% set est_m = (est_dur_mins % 60) %}
+                        <tr>
+                            <td><strong>{{ show.title }}</strong></td>
+                            <td>{{ show.season or "All" }}</td>
+                            <td>{{ show.total_episodes }}</td>
+                            <td>
+                                {% if show.x264_episodes == show.total_episodes %}
+                                    <span class="badge-all-x264">All x264</span>
+                                {% else %}
+                                    <span class="badge-partial-x264">{{ show.x264_episodes }} of {{ show.total_episodes }}</span>
+                                {% endif %}
+                            </td>
+                            <td>{{ "%.2f"|format(show.total_bytes / (1024**3)) }} GB</td>
+                            <td>{% if est_h > 0 %}{{ est_h }}h {{ est_m }}m{% else %}{{ est_m }}m{% endif %}</td>
+                            <td>
+                                {% if is_queued %}
+                                    <button type="button" class="btn-queued" disabled>Already Queued</button>
+                                {% else %}
+                                    <form method="post" action="{{ url_for('scheduler_add_job_route') }}">
+                                        <input type="hidden" name="directory" value="{{ show.directory }}">
+                                        <input type="hidden" name="item_name" value="{{ show.title }} - {{ show.season or 'Season' }}">
+                                        <input type="hidden" name="category" value="shows">
+                                        <input type="hidden" name="season" value="{{ show.season or '' }}">
+                                        <input type="hidden" name="total_files" value="{{ show.x264_episodes }}">
+                                        <input type="hidden" name="estimated_size_bytes" value="{{ show.total_bytes }}">
+                                        <button type="submit" class="btn-transcode-confirm">+ Add to Queue</button>
+                                    </form>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% endif %}
+
+            <!-- Film Recommendations for Queue -->
+            {% if recommendations.films %}
+            <h4 style="margin-top: 35px; color: var(--accent-orange);">Films (x264)</h4>
+            <p class="section-description">Select films to add to the transcoding schedule.</p>
+            <div class="table-container">
+                <table class="recommendations-table">
+                    <thead>
+                        <tr>
+                            <th>Title</th>
+                            <th>Filename</th>
+                            <th>Size</th>
+                            <th>Est. Duration</th>
+                            <th style="width: 140px;">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for film in recommendations.films %}
+                        {% set is_queued = film.directory in queued_directories %}
+                        {% set est_dur_mins = ((film.size_bytes / estimates.speed_bps) / 60) | round | int %}
+                        {% set est_h = (est_dur_mins // 60) %}
+                        {% set est_m = (est_dur_mins % 60) %}
+                        <tr>
+                            <td><strong>{{ film.title }}</strong></td>
+                            <td class="text-truncate">{{ film.filename }}</td>
+                            <td>{{ "%.2f"|format(film.size_bytes / (1024**3)) }} GB</td>
+                            <td>{% if est_h > 0 %}{{ est_h }}h {{ est_m }}m{% else %}{{ est_m }}m{% endif %}</td>
+                            <td>
+                                {% if is_queued %}
+                                    <button type="button" class="btn-queued" disabled>Already Queued</button>
+                                {% else %}
+                                    <form method="post" action="{{ url_for('scheduler_add_job_route') }}">
+                                        <input type="hidden" name="directory" value="{{ film.directory }}">
+                                        <input type="hidden" name="item_name" value="{{ film.title }}">
+                                        <input type="hidden" name="category" value="films">
+                                        <input type="hidden" name="total_files" value="1">
+                                        <input type="hidden" name="estimated_size_bytes" value="{{ film.size_bytes }}">
+                                        <button type="submit" class="btn-transcode-confirm">+ Add to Queue</button>
+                                    </form>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% endif %}
+
+            <!-- Custom Path Addition Card -->
+            <div class="scheduler-card" style="margin-top: 30px;">
+                <h4>Add Custom Folder to Schedule</h4>
+                <p class="section-description">Add any specific folder path to the transcoding schedule.</p>
+                <form method="post" action="{{ url_for('scheduler_add_job_route') }}" class="custom-add-form">
+                    <div class="form-row-custom">
+                        <div class="input-group flex-2">
+                            <label for="custom-dir">Folder Directory Path:</label>
+                            <input type="text" id="custom-dir" name="directory" placeholder="/films/MyMovie or /shows/MyShow/Season 1" required>
+                        </div>
+                        <div class="input-group flex-1">
+                            <label for="custom-name">Display Name (optional):</label>
+                            <input type="text" id="custom-name" name="item_name" placeholder="Friendly Name">
+                        </div>
+                        <div class="input-group">
+                            <label for="custom-category">Type:</label>
+                            <select id="custom-category" name="category">
+                                <option value="films">Film</option>
+                                <option value="shows">TV Show</option>
+                            </select>
+                        </div>
+                        <div class="input-group btn-align">
+                            <button type="submit" class="btn-primary">+ Add Custom Job</button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Completed / Past Scheduled Jobs -->
+        {% if all_jobs %}
+        {% set past_jobs = all_jobs | selectattr('status', 'in', ['completed', 'failed']) | list %}
+        {% if past_jobs %}
+        <div class="scheduler-section" style="margin-top: 40px;">
+            <div class="section-header-bar">
+                <h4>Past Scheduled Jobs</h4>
+                <form method="post" action="{{ url_for('scheduler_clear_completed_route') }}" style="margin: 0;">
+                    <button type="submit" class="btn-cancel" style="padding: 4px 12px; font-size: 0.8em;">Clear History</button>
+                </form>
+            </div>
+            <div class="table-container">
+                <table class="recommendations-table scan-history-table">
+                    <thead>
+                        <tr>
+                            <th>Item Name</th>
+                            <th>Type</th>
+                            <th>Finished At</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for pjob in past_jobs %}
+                        <tr>
+                            <td>{{ pjob.item_name }}</td>
+                            <td>{{ pjob.category | capitalize }}</td>
+                            <td>{{ pjob.completed_at[:16] | replace('T', ' ') if pjob.completed_at else '—' }}</td>
+                            <td>
+                                {% if pjob.status == 'completed' %}
+                                    <span class="status-badge status-success">Completed</span>
+                                {% else %}
+                                    <span class="status-badge status-failed">Failed</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        {% endif %}
+        {% endif %}
+
+    </div>
+</body>
+</html>

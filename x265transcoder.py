@@ -24,6 +24,12 @@ if __name__ == '__main__':
     telegram_token = sys.argv[5]
     telegram_chatid = sys.argv[6]
     version = sys.argv[7]
+    scheduled_job_id = None
+    if len(sys.argv) > 8 and sys.argv[8] and sys.argv[8] != "None":
+        try:
+            scheduled_job_id = int(sys.argv[8])
+        except ValueError:
+            pass
 
     OldFolderSizeBytes = 0
     NewFolderSizeBytes = 0
@@ -163,6 +169,7 @@ if __name__ == '__main__':
         total_files = len(file_list)
         store_job("total_files", total_files)
         progress_percentage = 0
+        window_ended = False
         for i, file_path in enumerate(file_list):
             store_job("current_file_number", i+1)
             logging.info(" ")
@@ -346,11 +353,36 @@ if __name__ == '__main__':
             progress_percentage = int((i + 1) / total_files * 100)
             logging.debug(f"Progress: {progress_percentage}%")
             update_progress_yaml("job_progress", progress_percentage)
+
+            # Check if this is a scheduled job and the schedule window has ended
+            if scheduled_job_id is not None and (i + 1) < total_files:
+                try:
+                    from modules.scheduler import is_in_schedule_window
+                    if not is_in_schedule_window():
+                        logging.info("Schedule window has ended. Finishing current file and pausing remaining files for next window.")
+                        update_progress_yaml("window_paused", "True")
+                        window_ended = True
+                        break
+                except Exception as e:
+                    logging.warning(f"Error checking schedule window: {e}")
         
         oldfoldersize = round(OldFolderSizeBytes / (1024*1024*1024), 2)
         newfoldersize = round(NewFolderSizeBytes / (1024*1024*1024), 2)
         folderpercdiff = round(((NewFolderSizeBytes/OldFolderSizeBytes)-1)*100, 2)
         TotalFiles = SuccessfulCount + FailedCount + SkippedCount
+
+        # Update scheduled job status if running in scheduled mode
+        if scheduled_job_id is not None:
+            try:
+                from modules.scheduler import mark_job_queued, mark_job_completed
+                if window_ended:
+                    logging.info(f"Scheduled job #{scheduled_job_id} paused at window close. Re-queueing for next window.")
+                    mark_job_queued(scheduled_job_id)
+                else:
+                    logging.info(f"Scheduled job #{scheduled_job_id} completed all files.")
+                    mark_job_completed(scheduled_job_id)
+            except Exception as e:
+                logging.error(f"Error updating scheduled job status: {e}")
 
         # Clear ETA now that the job is complete
         update_progress_yaml("eta", "")
@@ -359,7 +391,10 @@ if __name__ == '__main__':
         complete_job(history_job_id, TotalFiles, SuccessfulCount, FailedCount, SkippedCount,
                      OldFolderSizeBytes, NewFolderSizeBytes)
 
-        if FailedCount > 0:
+        if window_ended:
+            logging.info("Window ended. Sending Telegram update...")
+            send_telegram_message(f"Scheduled transcode window ended for {mediafolder}.\nFinished current file.\n{SuccessfulCount} file(s) completed so far. Outstanding files will automatically resume in the next window.")
+        elif FailedCount > 0:
             logging.warning(f"Some Jobs May have Failed: {Failed}")
             logging.info("Sending Telegram Message...")
             send_telegram_message(f"Transcode Job for {mediafolder} completed with failures.\n\n{SuccessfulCount} Succeeded | {FailedCount} Failed | {SkippedCount} Skipped\n\nThe following files failed verification: {Failed}")
@@ -398,3 +433,9 @@ if __name__ == '__main__':
         logging.warning("file list is empty.  Is mediafolder and include criteria correct?")
         # Complete the job with zero counts
         complete_job(history_job_id, 0, 0, 0, 0, 0, 0)
+        if scheduled_job_id is not None:
+            try:
+                from modules.scheduler import mark_job_completed
+                mark_job_completed(scheduled_job_id)
+            except Exception:
+                pass
