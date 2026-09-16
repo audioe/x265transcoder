@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -12,16 +13,22 @@
     <link rel="apple-touch-icon" href="{{ url_for('static', filename='icon-192.png') }}">
     <meta name="theme-color" content="#1e1e1e">
 </head>
+
 <body>
     <!-- Navigation -->
     <nav class="main-nav">
         <div class="nav-brand">x265 Transcoder</div>
-        <button class="mobile-menu-toggle" aria-label="Toggle navigation" onclick="document.getElementById('nav-links').classList.toggle('open')">☰</button>
+        <button class="mobile-menu-toggle" aria-label="Toggle navigation"
+            onclick="document.getElementById('nav-links').classList.toggle('open')">☰</button>
         <div class="nav-links-bar" id="nav-links">
-            <a href="{{ url_for('index') }}" class="nav-link {% if active_page == 'home' %}active{% endif %}">Transcode</a>
-            <a href="{{ url_for('scheduler_view') }}" class="nav-link {% if active_page == 'scheduler' %}active{% endif %}">Scheduler</a>
-            <a href="{{ url_for('recommendations') }}" class="nav-link {% if active_page == 'recommendations' %}active{% endif %}">Recommendations</a>
-            <a href="{{ url_for('history') }}" class="nav-link {% if active_page == 'history' %}active{% endif %}">History</a>
+            <a href="{{ url_for('index') }}"
+                class="nav-link {% if active_page == 'home' %}active{% endif %}">Transcode</a>
+            <a href="{{ url_for('scheduler_view') }}"
+                class="nav-link {% if active_page == 'scheduler' %}active{% endif %}">Scheduler</a>
+            <a href="{{ url_for('recommendations') }}"
+                class="nav-link {% if active_page == 'recommendations' %}active{% endif %}">Recommendations</a>
+            <a href="{{ url_for('history') }}"
+                class="nav-link {% if active_page == 'history' %}active{% endif %}">History</a>
             <a href="{{ url_for('logs') }}" class="nav-link {% if active_page == 'logs' %}active{% endif %}">Logs</a>
             <a href="{{ url_for('setup') }}" class="nav-link nav-link-secondary">Settings</a>
         </div>
@@ -32,25 +39,39 @@
 
         <!-- Scan Status Panel (updated live via AJAX) -->
         <div id="scan-status-container">
-            <div id="scan-status-panel" class="scan-status-panel {% if scan_status.running %}scan-running{% elif scan_status.phase == 'complete' %}scan-complete{% elif scan_status.phase == 'failed' %}scan-failed{% endif %}" {% if not scan_status.running and not scan_status.message %}style="display:none;"{% endif %}>
-                <h3 id="scan-heading">{% if scan_status.running %}Scan In Progress{% elif scan_status.phase == 'complete' %}Scan Complete{% elif scan_status.phase == 'failed' %}Scan Failed{% else %}Scan In Progress{% endif %}</h3>
-                <div class="scan-status-details" id="scan-status-details" {% if not scan_status.running %}style="display:none;"{% endif %}>
+            <div id="scan-status-panel"
+                class="scan-status-panel {% if scan_status.running %}scan-running{% elif scan_status.phase == 'complete' %}scan-complete{% elif scan_status.phase == 'failed' %}scan-failed{% endif %}"
+                {% if not scan_status.running and not scan_status.message %}style="display:none;" {% endif %}>
+                <h3 id="scan-heading">{% if scan_status.running %}Scan In Progress{% elif scan_status.phase ==
+                    'complete' %}Scan Complete{% elif scan_status.phase == 'failed' %}Scan Failed{% else %}Scan In
+                    Progress{% endif %}</h3>
+                <div class="scan-status-details" id="scan-status-details" {% if not scan_status.running
+                    %}style="display:none;" {% endif %}>
                     <p class="scan-status-type">
-                        <strong>Type:</strong> <span id="scan-type-val">{% if scan_status.scan_type %}{{ scan_status.scan_type | capitalize }} scan{% else %}Library scan{% endif %}</span>
+                        <strong>Type:</strong> <span id="scan-type-val">{% if scan_status.scan_type %}{{
+                            scan_status.scan_type | capitalize }} scan{% else %}Library scan{% endif %}</span>
                     </p>
                     <p class="scan-status-message" id="scan-message-val">{{ scan_status.message or '' }}</p>
-                    <p class="scan-status-file" id="scan-file-row" {% if not scan_status.current_file %}style="display:none;"{% endif %}>
-                        <strong>Current file:</strong> <span id="scan-file-val">{{ scan_status.current_file or '' }}</span>
+                    <p class="scan-status-file" id="scan-file-row" {% if not scan_status.current_file
+                        %}style="display:none;" {% endif %}>
+                        <strong>Current file:</strong> <span id="scan-file-val">{{ scan_status.current_file or ''
+                            }}</span>
                     </p>
                     <p class="scan-status-count">
-                        <strong>Files processed:</strong> <span id="scan-count-val">{{ scan_status.files_processed or 0 }}{% if scan_status.files_total %} / {{ scan_status.files_total }}{% endif %}</span>
+                        <strong>Files processed:</strong> <span id="scan-count-val">{{ scan_status.files_processed or 0
+                            }}{% if scan_status.files_total %} / {{ scan_status.files_total }}{% endif %}</span>
                     </p>
-                    <div class="progress-container" id="scan-progress-container" {% if not scan_status.files_total or scan_status.files_total <= 0 %}style="display:none;"{% endif %}>
-                        <progress id="scan-progress-bar" value="{{ scan_status.files_processed or 0 }}" max="{{ scan_status.files_total or 100 }}"></progress>
-                        <span class="progress-text" id="scan-progress-pct">{% if scan_status.files_total and scan_status.files_total > 0 %}{{ ((scan_status.files_processed / scan_status.files_total) * 100) | int }}%{% else %}0%{% endif %}</span>
+                    <div class="progress-container" id="scan-progress-container" {% if not scan_status.files_total or
+                        scan_status.files_total <=0 %}style="display:none;" {% endif %}>
+                        <progress id="scan-progress-bar" value="{{ scan_status.files_processed or 0 }}"
+                            max="{{ scan_status.files_total or 100 }}"></progress>
+                        <span class="progress-text" id="scan-progress-pct">{% if scan_status.files_total and
+                            scan_status.files_total > 0 %}{{ ((scan_status.files_processed / scan_status.files_total) *
+                            100) | int }}%{% else %}0%{% endif %}</span>
                     </div>
                 </div>
-                <div id="scan-static-message" {% if scan_status.running or not scan_status.message %}style="display:none;"{% endif %}>
+                <div id="scan-static-message" {% if scan_status.running or not scan_status.message
+                    %}style="display:none;" {% endif %}>
                     <p id="scan-static-message-val">{{ scan_status.message or '' }}</p>
                 </div>
             </div>
@@ -89,11 +110,11 @@
 
             <p class="scan-info">
                 {% if data.stats.last_incremental_scan %}
-                    Last scan: {{ data.stats.last_incremental_scan[:19] | replace("T", " ") }} UTC
+                Last scan: {{ data.stats.last_incremental_scan[:19] | replace("T", " ") }} UTC
                 {% elif data.stats.last_full_scan %}
-                    Last scan: {{ data.stats.last_full_scan[:19] | replace("T", " ") }} UTC
+                Last scan: {{ data.stats.last_full_scan[:19] | replace("T", " ") }} UTC
                 {% else %}
-                    No scan has been run yet.
+                No scan has been run yet.
                 {% endif %}
             </p>
 
@@ -113,15 +134,18 @@
                 {% if total > 0 %}
                 {% set x265_pct = ((data.stats.x265_count / total) * 100) | round(1) %}
                 {% set x264_pct = (100 - x265_pct) | round(1) %}
-                <div class="donut-chart" style="background: conic-gradient(#48bb78 0deg {{ (x265_pct * 3.6) | round }}deg, #ed8936 {{ (x265_pct * 3.6) | round }}deg 360deg);">
+                <div class="donut-chart"
+                    style="background: conic-gradient(#48bb78 0deg {{ (x265_pct * 3.6) | round }}deg, #ed8936 {{ (x265_pct * 3.6) | round }}deg 360deg);">
                     <div class="donut-center">
                         <span class="donut-value">{{ x265_pct }}%</span>
                         <span class="donut-label">x265</span>
                     </div>
                 </div>
                 <div class="chart-legend">
-                    <span class="legend-item"><span class="legend-dot x265"></span> x265 ({{ data.stats.x265_count }})</span>
-                    <span class="legend-item"><span class="legend-dot x264"></span> x264 ({{ data.stats.x264_count }})</span>
+                    <span class="legend-item"><span class="legend-dot x265"></span> x265 ({{ data.stats.x265_count
+                        }})</span>
+                    <span class="legend-item"><span class="legend-dot x264"></span> x264 ({{ data.stats.x264_count
+                        }})</span>
                 </div>
                 {% else %}
                 <p style="color: var(--text-muted);">No data available</p>
@@ -137,7 +161,8 @@
                     <div class="bar-item">
                         <span class="bar-label">x264</span>
                         <div class="bar-track">
-                            <div class="bar-fill x264" style="width: {{ (data.stats.x264_size_gb / max_size * 100) | round }}%;">
+                            <div class="bar-fill x264"
+                                style="width: {{ (data.stats.x264_size_gb / max_size * 100) | round }}%;">
                                 <span class="bar-value">{{ data.stats.x264_size_gb }} GB</span>
                             </div>
                         </div>
@@ -145,7 +170,8 @@
                     <div class="bar-item">
                         <span class="bar-label">x265</span>
                         <div class="bar-track">
-                            <div class="bar-fill x265" style="width: {{ (data.stats.x265_size_gb / max_size * 100) | round }}%;">
+                            <div class="bar-fill x265"
+                                style="width: {{ (data.stats.x265_size_gb / max_size * 100) | round }}%;">
                                 <span class="bar-value">{{ data.stats.x265_size_gb }} GB</span>
                             </div>
                         </div>
@@ -195,20 +221,25 @@
                     <tr data-directory="{{ film.directory }}" class="recommendation-row">
                         <td>{{ film.title }}</td>
                         <td title="{{ film.filename }}">{{ film.filename }}</td>
-                        <td class="nowrap" data-bytes="{{ film.size_bytes }}">{{ "%.2f"|format(film.size_bytes / (1024**3)) }} GB</td>
+                        <td class="nowrap" data-bytes="{{ film.size_bytes }}">{{ "%.2f"|format(film.size_bytes /
+                            (1024**3)) }} GB</td>
                         <td class="nowrap action-cell">
                             {% if film.status == 'in_progress' %}
-                                <span class="badge-status-action badge-in-progress" title="Currently transcoding"><span class="status-dot pulse-dot"></span> In Progress</span>
+                            <span class="badge-status-action badge-in-progress" title="Currently transcoding"><span
+                                    class="status-dot pulse-dot"></span> In Progress</span>
                             {% elif film.status == 'scheduled' %}
-                                <span class="badge-status-action badge-scheduled" title="Queued in scheduler"><span class="status-dot"></span> Scheduled</span>
+                            <span class="badge-status-action badge-scheduled" title="Queued in scheduler"><span
+                                    class="status-dot"></span> Scheduled</span>
                             {% else %}
-                                <button type="button" class="btn-transcode" onclick="showOptions('film-{{ loop.index }}')">Transcode</button>
+                            <button type="button" class="btn-transcode"
+                                onclick="showOptions('film-{{ loop.index }}')">Transcode</button>
                             {% endif %}
                         </td>
                     </tr>
                     <tr class="options-row" id="film-{{ loop.index }}" style="display: none;">
                         <td colspan="4">
-                            <form method="post" action="{{ url_for('run_from_recommendations') }}" class="transcode-options-form">
+                            <form method="post" action="{{ url_for('run_from_recommendations') }}"
+                                class="transcode-options-form">
                                 <input type="hidden" name="folder" value="{{ film.directory }}">
                                 <input type="hidden" name="item_name" value="{{ film.title }}">
                                 <input type="hidden" name="category" value="films">
@@ -217,8 +248,9 @@
                                 <div class="options-inline">
                                     <div class="option-group">
                                         <label>Quality (CQP):</label>
-                                        <input type="range" name="quality" min="18" max="25" step="1" value="23" oninput="this.nextElementSibling.textContent=this.value">
-                                        <span>23</span>
+                                        <input type="range" name="quality" min="18" max="25" step="1" value="20"
+                                            oninput="this.nextElementSibling.textContent=this.value">
+                                        <span>20</span>
                                     </div>
                                     <div class="option-group">
                                         <label>Delete originals:</label>
@@ -228,9 +260,15 @@
                                         </select>
                                     </div>
                                     <div class="option-group">
-                                        <button type="submit" class="btn-transcode-confirm" {% if transcoder_running %}disabled title="A transcode is currently in progress"{% endif %}>Start</button>
-                                        <button type="submit" formaction="{{ url_for('schedule_from_recommendations') }}" class="btn-schedule-action" title="Add to Transcode Schedule">+ Schedule</button>
-                                        <button type="button" class="btn-cancel" onclick="hideOptions('film-{{ loop.index }}')">Cancel</button>
+                                        <button type="submit" class="btn-transcode-confirm" {% if transcoder_running
+                                            %}disabled title="A transcode is currently in progress" {% endif
+                                            %}>Start</button>
+                                        <button type="submit"
+                                            formaction="{{ url_for('schedule_from_recommendations') }}"
+                                            class="btn-schedule-action" title="Add to Transcode Schedule">+
+                                            Schedule</button>
+                                        <button type="button" class="btn-cancel"
+                                            onclick="hideOptions('film-{{ loop.index }}')">Cancel</button>
                                     </div>
                                 </div>
                             </form>
@@ -245,7 +283,8 @@
         <!-- Show Recommendations -->
         {% if data.shows %}
         <h3>Show Season Recommendations</h3>
-        <p class="section-description">Largest x264 show seasons — transcode a full season for maximum space savings.</p>
+        <p class="section-description">Largest x264 show seasons — transcode a full season for maximum space savings.
+        </p>
         <div class="table-container">
             <table class="recommendations-table" id="shows-table">
                 <thead>
@@ -266,27 +305,34 @@
                         <td class="nowrap">{{ show.total_episodes }}</td>
                         <td class="nowrap">
                             {% if show.x264_episodes == show.total_episodes %}
-                                <span class="badge-all-x264">All x264</span>
+                            <span class="badge-all-x264">All x264</span>
                             {% else %}
-                                <span class="badge-partial-x264">{{ show.x264_episodes }} of {{ show.total_episodes }}</span>
+                            <span class="badge-partial-x264">{{ show.x264_episodes }} of {{ show.total_episodes
+                                }}</span>
                             {% endif %}
                         </td>
-                        <td class="nowrap" data-bytes="{{ show.total_bytes }}">{{ "%.2f"|format(show.total_bytes / (1024**3)) }} GB</td>
+                        <td class="nowrap" data-bytes="{{ show.total_bytes }}">{{ "%.2f"|format(show.total_bytes /
+                            (1024**3)) }} GB</td>
                         <td class="nowrap action-cell">
                             {% if show.status == 'in_progress' %}
-                                <span class="badge-status-action badge-in-progress" title="Currently transcoding"><span class="status-dot pulse-dot"></span> In Progress</span>
+                            <span class="badge-status-action badge-in-progress" title="Currently transcoding"><span
+                                    class="status-dot pulse-dot"></span> In Progress</span>
                             {% elif show.status == 'scheduled' %}
-                                <span class="badge-status-action badge-scheduled" title="Queued in scheduler"><span class="status-dot"></span> Scheduled</span>
+                            <span class="badge-status-action badge-scheduled" title="Queued in scheduler"><span
+                                    class="status-dot"></span> Scheduled</span>
                             {% else %}
-                                <button type="button" class="btn-transcode" onclick="showOptions('show-{{ loop.index }}')">Transcode</button>
+                            <button type="button" class="btn-transcode"
+                                onclick="showOptions('show-{{ loop.index }}')">Transcode</button>
                             {% endif %}
                         </td>
                     </tr>
                     <tr class="options-row" id="show-{{ loop.index }}" style="display: none;">
                         <td colspan="6">
-                            <form method="post" action="{{ url_for('run_from_recommendations') }}" class="transcode-options-form">
+                            <form method="post" action="{{ url_for('run_from_recommendations') }}"
+                                class="transcode-options-form">
                                 <input type="hidden" name="folder" value="{{ show.directory }}">
-                                <input type="hidden" name="item_name" value="{{ show.title }} - {{ show.season or 'Season' }}">
+                                <input type="hidden" name="item_name"
+                                    value="{{ show.title }} - {{ show.season or 'Season' }}">
                                 <input type="hidden" name="category" value="shows">
                                 <input type="hidden" name="season" value="{{ show.season or '' }}">
                                 <input type="hidden" name="total_files" value="{{ show.x264_episodes }}">
@@ -294,8 +340,9 @@
                                 <div class="options-inline">
                                     <div class="option-group">
                                         <label>Quality (CQP):</label>
-                                        <input type="range" name="quality" min="18" max="25" step="1" value="23" oninput="this.nextElementSibling.textContent=this.value">
-                                        <span>23</span>
+                                        <input type="range" name="quality" min="18" max="25" step="1" value="20"
+                                            oninput="this.nextElementSibling.textContent=this.value">
+                                        <span>20</span>
                                     </div>
                                     <div class="option-group">
                                         <label>Delete originals:</label>
@@ -305,9 +352,15 @@
                                         </select>
                                     </div>
                                     <div class="option-group">
-                                        <button type="submit" class="btn-transcode-confirm" {% if transcoder_running %}disabled title="A transcode is currently in progress"{% endif %}>Start</button>
-                                        <button type="submit" formaction="{{ url_for('schedule_from_recommendations') }}" class="btn-schedule-action" title="Add to Transcode Schedule">+ Schedule</button>
-                                        <button type="button" class="btn-cancel" onclick="hideOptions('show-{{ loop.index }}')">Cancel</button>
+                                        <button type="submit" class="btn-transcode-confirm" {% if transcoder_running
+                                            %}disabled title="A transcode is currently in progress" {% endif
+                                            %}>Start</button>
+                                        <button type="submit"
+                                            formaction="{{ url_for('schedule_from_recommendations') }}"
+                                            class="btn-schedule-action" title="Add to Transcode Schedule">+
+                                            Schedule</button>
+                                        <button type="button" class="btn-cancel"
+                                            onclick="hideOptions('show-{{ loop.index }}')">Cancel</button>
                                     </div>
                                 </div>
                             </form>
@@ -346,9 +399,9 @@
                         <td class="nowrap">{{ scan.started_at[:16] | replace("T", " ") }}</td>
                         <td class="nowrap">
                             {% if scan.duration_seconds %}
-                                {{ "%.1f"|format(scan.duration_seconds) }}s
+                            {{ "%.1f"|format(scan.duration_seconds) }}s
                             {% else %}
-                                —
+                            —
                             {% endif %}
                         </td>
                         <td class="nowrap">{{ scan.files_processed }}</td>
@@ -356,13 +409,13 @@
                         <td class="nowrap">{{ scan.files_removed }}</td>
                         <td class="nowrap">
                             {% if scan.status == "success" %}
-                                <span class="status-badge status-success">Success</span>
+                            <span class="status-badge status-success">Success</span>
                             {% elif scan.status == "failed" %}
-                                <span class="status-badge status-failed" title="{{ scan.error_message }}">Failed</span>
+                            <span class="status-badge status-failed" title="{{ scan.error_message }}">Failed</span>
                             {% elif scan.status == "running" %}
-                                <span class="status-badge status-running">Running</span>
+                            <span class="status-badge status-running">Running</span>
                             {% else %}
-                                {{ scan.status }}
+                            {{ scan.status }}
                             {% endif %}
                         </td>
                     </tr>
@@ -428,7 +481,7 @@
         }
 
         // Animate bar chart fills on load
-        document.addEventListener('DOMContentLoaded', function() {
+        document.addEventListener('DOMContentLoaded', function () {
             const bars = document.querySelectorAll('.bar-fill');
             bars.forEach(bar => {
                 const targetWidth = bar.style.width;
@@ -569,7 +622,7 @@
 
         // Intercept "Scan Now" form submissions for smooth in-page AJAX start
         document.querySelectorAll('.scan-form').forEach(form => {
-            form.addEventListener('submit', function(e) {
+            form.addEventListener('submit', function (e) {
                 e.preventDefault();
                 const submitBtn = form.querySelector('.btn-scan');
                 if (submitBtn) {
@@ -592,14 +645,14 @@
                     method: 'POST',
                     headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' }
                 })
-                .then(res => res.json())
-                .then(data => {
-                    startScanPolling();
-                })
-                .catch(err => {
-                    console.error('Error starting scan:', err);
-                    startScanPolling();
-                });
+                    .then(res => res.json())
+                    .then(data => {
+                        startScanPolling();
+                    })
+                    .catch(err => {
+                        console.error('Error starting scan:', err);
+                        startScanPolling();
+                    });
             });
         });
 
@@ -673,7 +726,7 @@
             window.addEventListener('load', () => {
                 navigator.serviceWorker.register('/sw.js').then(registration => {
                     console.log('ServiceWorker registration successful with scope: ', registration.scope);
-                    
+
                     registration.addEventListener('updatefound', () => {
                         const newWorker = registration.installing;
                         newWorker.addEventListener('statechange', () => {
@@ -696,4 +749,5 @@
         }
     </script>
 </body>
+
 </html>
