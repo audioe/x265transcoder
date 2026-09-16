@@ -53,7 +53,8 @@
     <!-- Navigation -->
     <nav class="main-nav">
         <div class="nav-brand">x265 Transcoder</div>
-        <div class="nav-links-bar">
+        <button class="mobile-menu-toggle" aria-label="Toggle navigation" onclick="document.getElementById('nav-links').classList.toggle('open')">☰</button>
+        <div class="nav-links-bar" id="nav-links">
             <a href="{{ url_for('index') }}" class="nav-link {% if active_page == 'home' %}active{% endif %}">Transcode</a>
             <a href="{{ url_for('scheduler_view') }}" class="nav-link {% if active_page == 'scheduler' %}active{% endif %}">Scheduler</a>
             <a href="{{ url_for('recommendations') }}" class="nav-link {% if active_page == 'recommendations' %}active{% endif %}">Recommendations</a>

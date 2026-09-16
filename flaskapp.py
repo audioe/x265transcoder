@@ -544,6 +544,13 @@ scheduler.add_job(check_and_run_scheduled_jobs, 'interval', seconds=15, id='tran
 scheduler.start()
 
 
+def _normalize_dir(d):
+    """Normalize directory path for cross-platform and slash-tolerant comparisons."""
+    if not d:
+        return ""
+    return os.path.normpath(d).replace('\\', '/').rstrip('/').lower()
+
+
 # --- Recommendations & Scan Routes ---
 
 @app.route('/recommendations')
@@ -553,9 +560,81 @@ def recommendations():
     scan_status = get_scan_status()
     history = get_scan_history(limit=10)
     transcoder_running = transcode_check('x265transcoder.py')
+
+    active_job_directory = ''
+    if transcoder_running and os.path.exists('/config/job.yaml'):
+        try:
+            with open('/config/job.yaml', 'r') as f:
+                job_config = yaml.safe_load(f)
+                if job_config:
+                    active_job_directory = job_config.get('job_directory', '')
+        except Exception:
+            pass
+
+    scheduled_queue = get_scheduled_queue()
+    scheduled_directories = [
+        item['directory'] for item in scheduled_queue
+        if item.get('status') in ('queued', 'paused')
+    ]
+    if not active_job_directory and transcoder_running:
+        for item in scheduled_queue:
+            if item.get('status') == 'running':
+                active_job_directory = item.get('directory', '')
+                break
+
+    active_norm = _normalize_dir(active_job_directory) if transcoder_running else ''
+    sched_norms = {_normalize_dir(d) for d in scheduled_directories if d}
+
+    for film in data.get('films', []):
+        f_norm = _normalize_dir(film.get('directory'))
+        if active_norm and f_norm == active_norm:
+            film['status'] = 'in_progress'
+        elif f_norm in sched_norms:
+            film['status'] = 'scheduled'
+        else:
+            film['status'] = 'ready'
+
+    for show in data.get('shows', []):
+        s_norm = _normalize_dir(show.get('directory'))
+        if active_norm and s_norm == active_norm:
+            show['status'] = 'in_progress'
+        elif s_norm in sched_norms:
+            show['status'] = 'scheduled'
+        else:
+            show['status'] = 'ready'
+
     return render_template('recommendations.html', version=version, config=config,
                            data=data, scan_status=scan_status, scan_history=history,
-                           transcoder_running=transcoder_running, active_page='recommendations')
+                           transcoder_running=transcoder_running,
+                           active_job_directory=active_job_directory,
+                           scheduled_directories=scheduled_directories,
+                           active_page='recommendations')
+
+
+@app.route('/schedule_from_recommendations', methods=['POST'])
+def schedule_from_recommendations():
+    load_config()
+    directory = request.form.get('folder', '').strip()
+    item_name = request.form.get('item_name', '').strip() or os.path.basename(directory.rstrip('/\\'))
+    category = request.form.get('category', 'films')
+    season = request.form.get('season') or None
+    quality = request.form.get('quality')
+    delete = request.form.get('delete', 'Yes')
+    total_files = int(request.form.get('total_files', 0) or 0)
+    estimated_size_bytes = int(request.form.get('estimated_size_bytes', 0) or 0)
+
+    if directory:
+        add_to_queue(
+            directory=directory,
+            item_name=item_name,
+            category=category,
+            season=season,
+            quality=int(quality) if quality else 23,
+            delete_originals=delete,
+            total_files=total_files,
+            estimated_size_bytes=estimated_size_bytes
+        )
+    return redirect(url_for('recommendations'))
 
 
 @app.route('/scan_now', methods=['POST'])
@@ -616,6 +695,13 @@ def job_status_endpoint():
             result['scheduled_item_name'] = job_config.get('scheduled_item_name', '')
         except Exception:
             pass
+
+    scheduled_queue = get_scheduled_queue()
+    result['running_directory'] = job_directory if transcoder_status else ''
+    result['scheduled_directories'] = [
+        item['directory'] for item in scheduled_queue
+        if item.get('status') in ('queued', 'paused')
+    ]
 
     display_info = get_now_and_upcoming_display(job_directory if transcoder_status else None)
     result['now_transcoding'] = display_info.get("now_transcoding", "")

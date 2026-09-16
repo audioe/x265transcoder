@@ -12,7 +12,8 @@
     <!-- Navigation -->
     <nav class="main-nav">
         <div class="nav-brand">x265 Transcoder</div>
-        <div class="nav-links-bar">
+        <button class="mobile-menu-toggle" aria-label="Toggle navigation" onclick="document.getElementById('nav-links').classList.toggle('open')">☰</button>
+        <div class="nav-links-bar" id="nav-links">
             <a href="{{ url_for('index') }}" class="nav-link {% if active_page == 'home' %}active{% endif %}">Transcode</a>
             <a href="{{ url_for('scheduler_view') }}" class="nav-link {% if active_page == 'scheduler' %}active{% endif %}">Scheduler</a>
             <a href="{{ url_for('recommendations') }}" class="nav-link {% if active_page == 'recommendations' %}active{% endif %}">Recommendations</a>
@@ -187,18 +188,28 @@
                 </thead>
                 <tbody>
                     {% for film in data.films %}
-                    <tr>
+                    <tr data-directory="{{ film.directory }}" class="recommendation-row">
                         <td>{{ film.title }}</td>
-                        <td>{{ film.filename }}</td>
-                        <td data-bytes="{{ film.size_bytes }}">{{ "%.2f"|format(film.size_bytes / (1024**3)) }} GB</td>
-                        <td>
-                            <button type="button" class="btn-transcode" onclick="showOptions('film-{{ loop.index }}')" {% if transcoder_running %}disabled{% endif %}>Transcode</button>
+                        <td title="{{ film.filename }}">{{ film.filename }}</td>
+                        <td class="nowrap" data-bytes="{{ film.size_bytes }}">{{ "%.2f"|format(film.size_bytes / (1024**3)) }} GB</td>
+                        <td class="nowrap action-cell">
+                            {% if film.status == 'in_progress' %}
+                                <span class="badge-status-action badge-in-progress" title="Currently transcoding"><span class="status-dot pulse-dot"></span> In Progress</span>
+                            {% elif film.status == 'scheduled' %}
+                                <span class="badge-status-action badge-scheduled" title="Queued in scheduler"><span class="status-dot"></span> Scheduled</span>
+                            {% else %}
+                                <button type="button" class="btn-transcode" onclick="showOptions('film-{{ loop.index }}')">Transcode</button>
+                            {% endif %}
                         </td>
                     </tr>
                     <tr class="options-row" id="film-{{ loop.index }}" style="display: none;">
                         <td colspan="4">
                             <form method="post" action="{{ url_for('run_from_recommendations') }}" class="transcode-options-form">
                                 <input type="hidden" name="folder" value="{{ film.directory }}">
+                                <input type="hidden" name="item_name" value="{{ film.title }}">
+                                <input type="hidden" name="category" value="films">
+                                <input type="hidden" name="total_files" value="1">
+                                <input type="hidden" name="estimated_size_bytes" value="{{ film.size_bytes }}">
                                 <div class="options-inline">
                                     <div class="option-group">
                                         <label>Quality (CQP):</label>
@@ -213,7 +224,8 @@
                                         </select>
                                     </div>
                                     <div class="option-group">
-                                        <input type="submit" value="Start" class="btn-transcode-confirm">
+                                        <button type="submit" class="btn-transcode-confirm" {% if transcoder_running %}disabled title="A transcode is currently in progress"{% endif %}>Start</button>
+                                        <button type="submit" formaction="{{ url_for('schedule_from_recommendations') }}" class="btn-schedule-action" title="Add to Transcode Schedule">+ Schedule</button>
                                         <button type="button" class="btn-cancel" onclick="hideOptions('film-{{ loop.index }}')">Cancel</button>
                                     </div>
                                 </div>
@@ -244,26 +256,37 @@
                 </thead>
                 <tbody>
                     {% for show in data.shows %}
-                    <tr>
+                    <tr data-directory="{{ show.directory }}" class="recommendation-row">
                         <td>{{ show.title }}</td>
-                        <td>{{ show.season or "—" }}</td>
-                        <td>{{ show.total_episodes }}</td>
-                        <td>
+                        <td class="nowrap">{{ show.season or "—" }}</td>
+                        <td class="nowrap">{{ show.total_episodes }}</td>
+                        <td class="nowrap">
                             {% if show.x264_episodes == show.total_episodes %}
                                 <span class="badge-all-x264">All x264</span>
                             {% else %}
                                 <span class="badge-partial-x264">{{ show.x264_episodes }} of {{ show.total_episodes }}</span>
                             {% endif %}
                         </td>
-                        <td data-bytes="{{ show.total_bytes }}">{{ "%.2f"|format(show.total_bytes / (1024**3)) }} GB</td>
-                        <td>
-                            <button type="button" class="btn-transcode" onclick="showOptions('show-{{ loop.index }}')" {% if transcoder_running %}disabled{% endif %}>Transcode</button>
+                        <td class="nowrap" data-bytes="{{ show.total_bytes }}">{{ "%.2f"|format(show.total_bytes / (1024**3)) }} GB</td>
+                        <td class="nowrap action-cell">
+                            {% if show.status == 'in_progress' %}
+                                <span class="badge-status-action badge-in-progress" title="Currently transcoding"><span class="status-dot pulse-dot"></span> In Progress</span>
+                            {% elif show.status == 'scheduled' %}
+                                <span class="badge-status-action badge-scheduled" title="Queued in scheduler"><span class="status-dot"></span> Scheduled</span>
+                            {% else %}
+                                <button type="button" class="btn-transcode" onclick="showOptions('show-{{ loop.index }}')">Transcode</button>
+                            {% endif %}
                         </td>
                     </tr>
                     <tr class="options-row" id="show-{{ loop.index }}" style="display: none;">
                         <td colspan="6">
                             <form method="post" action="{{ url_for('run_from_recommendations') }}" class="transcode-options-form">
                                 <input type="hidden" name="folder" value="{{ show.directory }}">
+                                <input type="hidden" name="item_name" value="{{ show.title }} - {{ show.season or 'Season' }}">
+                                <input type="hidden" name="category" value="shows">
+                                <input type="hidden" name="season" value="{{ show.season or '' }}">
+                                <input type="hidden" name="total_files" value="{{ show.x264_episodes }}">
+                                <input type="hidden" name="estimated_size_bytes" value="{{ show.total_bytes }}">
                                 <div class="options-inline">
                                     <div class="option-group">
                                         <label>Quality (CQP):</label>
@@ -278,7 +301,8 @@
                                         </select>
                                     </div>
                                     <div class="option-group">
-                                        <input type="submit" value="Start" class="btn-transcode-confirm">
+                                        <button type="submit" class="btn-transcode-confirm" {% if transcoder_running %}disabled title="A transcode is currently in progress"{% endif %}>Start</button>
+                                        <button type="submit" formaction="{{ url_for('schedule_from_recommendations') }}" class="btn-schedule-action" title="Add to Transcode Schedule">+ Schedule</button>
                                         <button type="button" class="btn-cancel" onclick="hideOptions('show-{{ loop.index }}')">Cancel</button>
                                     </div>
                                 </div>
@@ -314,19 +338,19 @@
                 <tbody>
                     {% for scan in scan_history %}
                     <tr class="scan-row-{{ scan.status }}">
-                        <td>{{ scan.scan_type | capitalize }}</td>
-                        <td>{{ scan.started_at[:16] | replace("T", " ") }}</td>
-                        <td>
+                        <td class="nowrap">{{ scan.scan_type | capitalize }}</td>
+                        <td class="nowrap">{{ scan.started_at[:16] | replace("T", " ") }}</td>
+                        <td class="nowrap">
                             {% if scan.duration_seconds %}
                                 {{ "%.1f"|format(scan.duration_seconds) }}s
                             {% else %}
                                 —
                             {% endif %}
                         </td>
-                        <td>{{ scan.files_processed }}</td>
-                        <td>{{ scan.files_added }}</td>
-                        <td>{{ scan.files_removed }}</td>
-                        <td>
+                        <td class="nowrap">{{ scan.files_processed }}</td>
+                        <td class="nowrap">{{ scan.files_added }}</td>
+                        <td class="nowrap">{{ scan.files_removed }}</td>
+                        <td class="nowrap">
                             {% if scan.status == "success" %}
                                 <span class="status-badge status-success">Success</span>
                             {% elif scan.status == "failed" %}
@@ -574,6 +598,71 @@
                 });
             });
         });
+
+        // Live Job & Schedule Status Polling
+        function normalizePath(p) {
+            if (!p) return '';
+            return p.replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase();
+        }
+
+        let lastJobRunning = {{ 'true' if transcoder_running else 'false' }};
+
+        function pollJobStatus() {
+            fetch('{{ url_for("job_status_endpoint") }}')
+                .then(res => res.json())
+                .then(data => {
+                    const isRunning = !!data.running;
+                    const runningDir = normalizePath(data.running_directory || '');
+                    const schedDirs = (data.scheduled_directories || []).map(normalizePath);
+
+                    // Update Start buttons disabled state in options forms
+                    document.querySelectorAll('.btn-transcode-confirm').forEach(btn => {
+                        if (isRunning) {
+                            btn.disabled = true;
+                            btn.title = "A transcode is currently in progress";
+                        } else {
+                            btn.disabled = false;
+                            btn.title = "";
+                        }
+                    });
+
+                    // Update each row's action cell
+                    document.querySelectorAll('.recommendation-row').forEach(row => {
+                        const dir = normalizePath(row.getAttribute('data-directory') || '');
+                        const actionCell = row.querySelector('.action-cell');
+                        const optionsRow = row.nextElementSibling;
+                        if (!actionCell || !dir) return;
+
+                        if (isRunning && runningDir && dir === runningDir) {
+                            actionCell.innerHTML = '<span class="badge-status-action badge-in-progress" title="Currently transcoding"><span class="status-dot pulse-dot"></span> In Progress</span>';
+                            if (optionsRow && optionsRow.classList.contains('options-row')) {
+                                optionsRow.style.display = 'none';
+                            }
+                        } else if (schedDirs.includes(dir)) {
+                            actionCell.innerHTML = '<span class="badge-status-action badge-scheduled" title="Queued in scheduler"><span class="status-dot"></span> Scheduled</span>';
+                            if (optionsRow && optionsRow.classList.contains('options-row')) {
+                                optionsRow.style.display = 'none';
+                            }
+                        } else {
+                            // If currently showing a status badge, restore the Transcode button
+                            if (!actionCell.querySelector('.btn-transcode')) {
+                                const rowId = optionsRow ? optionsRow.id : '';
+                                actionCell.innerHTML = `<button type="button" class="btn-transcode" onclick="showOptions('${rowId}')">Transcode</button>`;
+                            }
+                        }
+                    });
+
+                    if (lastJobRunning && !isRunning) {
+                        lastJobRunning = false;
+                        setTimeout(() => { window.location.reload(); }, 2000);
+                    } else {
+                        lastJobRunning = isRunning;
+                    }
+                })
+                .catch(err => console.debug('Job status poll error:', err));
+        }
+
+        setInterval(pollJobStatus, 4000);
     </script>
 </body>
 </html>

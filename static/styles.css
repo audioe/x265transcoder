@@ -142,6 +142,16 @@ body {
     font-family: 'JetBrains Mono', monospace;
 }
 
+.mobile-menu-toggle {
+    display: none;
+    background: none;
+    border: none;
+    color: var(--text-primary);
+    font-size: 1.5em;
+    cursor: pointer;
+    margin-left: auto;
+}
+
 /* --- Page Content & Container --- */
 
 .page-content {
@@ -151,7 +161,7 @@ body {
 
 .container {
     position: relative;
-    max-width: 800px;
+    max-width: 1000px;
     width: 90%;
     margin: 0 auto;
     padding: 40px;
@@ -162,7 +172,7 @@ body {
 }
 
 .recommendations-container {
-    max-width: 1100px;
+    max-width: 1400px;
 }
 
 h1 {
@@ -542,8 +552,8 @@ progress::-moz-progress-bar {
     font-size: 0.9em;
     font-weight: 600;
     color: var(--text-primary);
-    overflow: hidden;
-    text-overflow: ellipsis;
+    overflow-wrap: anywhere;
+    word-break: break-word;
 }
 
 .meta-eta {
@@ -573,7 +583,8 @@ progress::-moz-progress-bar {
     font-size: 0.9em;
     font-weight: 600;
     color: var(--text-primary);
-    word-break: break-all;
+    overflow-wrap: anywhere;
+    word-break: break-word;
 }
 
 /* Progress bars */
@@ -1015,6 +1026,10 @@ progress::-moz-progress-bar {
     border-bottom: none;
 }
 
+.nowrap {
+    white-space: nowrap;
+}
+
 /* --- Scan Status Panel --- */
 
 .scan-status-panel {
@@ -1057,7 +1072,8 @@ progress::-moz-progress-bar {
 .scan-status-file {
     font-size: 0.9em;
     color: var(--text-secondary);
-    word-break: break-all;
+    overflow-wrap: anywhere;
+    word-break: break-word;
     font-family: 'JetBrains Mono', monospace;
     font-size: 0.8em;
 }
@@ -1208,6 +1224,62 @@ progress::-moz-progress-bar {
 .btn-detail:hover {
     transform: translateY(-1px);
     box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+}
+
+.btn-schedule-action {
+    background: var(--gradient-blue);
+    color: white;
+    padding: 7px 16px;
+    border: none;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    font-size: 0.85em;
+    font-weight: 700;
+    margin: 0;
+    transition: var(--transition);
+}
+
+.btn-schedule-action:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+}
+
+/* --- Action Badges for Recommendations Table --- */
+.badge-status-action {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 14px;
+    border-radius: var(--radius-sm);
+    font-size: 0.82em;
+    font-weight: 700;
+    line-height: 1.2;
+    letter-spacing: 0.3px;
+    user-select: none;
+}
+
+.badge-in-progress {
+    background: rgba(99, 179, 237, 0.15);
+    color: var(--accent-blue);
+    border: 1px solid rgba(99, 179, 237, 0.35);
+}
+
+.badge-scheduled {
+    background: rgba(183, 148, 244, 0.15);
+    color: var(--accent-purple);
+    border: 1px solid rgba(183, 148, 244, 0.35);
+}
+
+.status-dot {
+    display: inline-block;
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background-color: currentColor;
+}
+
+.pulse-dot {
+    animation: pulse 1.5s infinite;
 }
 
 .inline-form {
@@ -1398,13 +1470,41 @@ progress::-moz-progress-bar {
 
 /* Tablet */
 @media (max-width: 768px) {
+    .mobile-menu-toggle {
+        display: block;
+    }
+    
+    .nav-links-bar {
+        display: none;
+        flex-direction: column;
+        position: absolute;
+        top: 52px;
+        left: 0;
+        right: 0;
+        background-color: var(--bg-secondary);
+        border-bottom: 1px solid var(--border-subtle);
+        padding: 10px;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+    }
+    
+    .nav-links-bar.open {
+        display: flex;
+    }
+
+    .nav-link {
+        padding: 12px 16px;
+        font-size: 1em;
+        text-align: center;
+    }
+
+    .nav-link-secondary { margin-left: 0; margin-top: 5px; border-top: 1px solid var(--border-subtle); }
+
     .main-nav {
         padding: 0 16px;
         height: 52px;
     }
 
-    .nav-brand { font-size: 1em; margin-right: 16px; }
-    .nav-link { padding: 6px 12px; font-size: 0.82em; }
+    .nav-brand { font-size: 1em; margin-right: auto; }
     .nav-version { display: none; }
 
     .container {
@@ -1449,9 +1549,8 @@ progress::-moz-progress-bar {
         height: 48px;
     }
 
-    .nav-brand { font-size: 0.95em; margin-right: 10px; }
-    .nav-link { padding: 6px 10px; font-size: 0.78em; }
-    .nav-link-secondary { margin-left: 8px; }
+    .nav-brand { font-size: 0.95em; margin-right: auto; }
+    .nav-link { font-size: 0.9em; }
 
     .container {
         width: 100%;
@@ -1508,7 +1607,6 @@ progress::-moz-progress-bar {
 
     .current-file-name {
         font-size: 0.85em;
-        word-break: break-word;
     }
 
     /* Tables: allow horizontal scroll but increase touch area */

@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -8,15 +9,22 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
 </head>
+
 <body>
     <!-- Navigation -->
     <nav class="main-nav">
         <div class="nav-brand">x265 Transcoder</div>
-        <div class="nav-links-bar">
-            <a href="{{ url_for('index') }}" class="nav-link {% if active_page == 'home' %}active{% endif %}">Transcode</a>
-            <a href="{{ url_for('scheduler_view') }}" class="nav-link {% if active_page == 'scheduler' %}active{% endif %}">Scheduler</a>
-            <a href="{{ url_for('recommendations') }}" class="nav-link {% if active_page == 'recommendations' %}active{% endif %}">Recommendations</a>
-            <a href="{{ url_for('history') }}" class="nav-link {% if active_page == 'history' %}active{% endif %}">History</a>
+        <button class="mobile-menu-toggle" aria-label="Toggle navigation"
+            onclick="document.getElementById('nav-links').classList.toggle('open')">☰</button>
+        <div class="nav-links-bar" id="nav-links">
+            <a href="{{ url_for('index') }}"
+                class="nav-link {% if active_page == 'home' %}active{% endif %}">Transcode</a>
+            <a href="{{ url_for('scheduler_view') }}"
+                class="nav-link {% if active_page == 'scheduler' %}active{% endif %}">Scheduler</a>
+            <a href="{{ url_for('recommendations') }}"
+                class="nav-link {% if active_page == 'recommendations' %}active{% endif %}">Recommendations</a>
+            <a href="{{ url_for('history') }}"
+                class="nav-link {% if active_page == 'history' %}active{% endif %}">History</a>
             <a href="{{ url_for('logs') }}" class="nav-link {% if active_page == 'logs' %}active{% endif %}">Logs</a>
             <a href="{{ url_for('setup') }}" class="nav-link nav-link-secondary">Settings</a>
         </div>
@@ -36,16 +44,19 @@
             <div class="progress-meta" id="progress-meta">
                 <div class="progress-meta-item">
                     <span class="meta-label">Target</span>
-                    <span class="meta-value" id="meta-directory">{{ job_directory.split('/')[-1] if job_directory else 'Unknown' }}</span>
+                    <span class="meta-value" id="meta-directory" title="{{ job_directory }}">{{
+                        job_directory.split('/')[-1] if job_directory else 'Unknown' }}</span>
                 </div>
                 <div class="progress-meta-item">
                     <span class="meta-label">Type</span>
-                    <span class="meta-value">{% if job_directory and "films" in job_directory %}Film{% else %}Show{% endif %}</span>
+                    <span class="meta-value">{% if job_directory and "films" in job_directory %}Film{% else %}Show{%
+                        endif %}</span>
                 </div>
                 <div class="progress-meta-item">
                     <span class="meta-label">File</span>
                     <span class="meta-value" id="meta-file-counter">
-                        {% if current_file_number and total_files %}{{ current_file_number }} of {{ total_files }}{% else %}—{% endif %}
+                        {% if current_file_number and total_files %}{{ current_file_number }} of {{ total_files }}{%
+                        else %}—{% endif %}
                     </span>
                 </div>
                 <div class="progress-meta-item">
@@ -54,7 +65,7 @@
                 </div>
                 {% if films_free_gb %}
                 <div class="progress-meta-item">
-                    <span class="meta-label">/films Free</span>
+                    <span class="meta-label">Free Space</span>
                     <span class="meta-value">{{ films_free_gb }} GB</span>
                 </div>
                 {% endif %}
@@ -63,7 +74,8 @@
             <div class="progress-current-file" id="current-file-display">
                 {% if current_file and "Loading" not in current_file %}
                 <span class="current-file-label">Now transcoding:</span>
-                <span class="current-file-name" id="current-file-name">{{ current_file }}</span>
+                <span class="current-file-name" id="current-file-name" title="{{ current_file }}">{{ current_file
+                    }}</span>
                 {% else %}
                 <span class="current-file-label progress-loading">Waiting for transcode to begin...</span>
                 {% endif %}
@@ -77,7 +89,8 @@
                         <span class="progress-bar-pct" id="file-pct">{{ file_progress }}%</span>
                     </div>
                     <div class="progress-bar-track">
-                        <div class="progress-bar-fill animated-stripes" id="file-bar" style="width: {{ file_progress }}%;"></div>
+                        <div class="progress-bar-fill animated-stripes" id="file-bar"
+                            style="width: {{ file_progress }}%;"></div>
                     </div>
                 </div>
 
@@ -87,20 +100,24 @@
                         <span class="progress-bar-pct" id="job-pct">{{ job_progress }}%</span>
                     </div>
                     <div class="progress-bar-track">
-                        <div class="progress-bar-fill animated-stripes job-bar" id="job-bar" style="width: {{ job_progress }}%;"></div>
+                        <div class="progress-bar-fill animated-stripes job-bar" id="job-bar"
+                            style="width: {{ job_progress }}%;"></div>
                     </div>
                 </div>
                 {% endif %}
             </div>
 
             <!-- Scheduled Queue Items Display -->
-            <div class="transcode-queue-panel" id="transcode-queue-panel" {% if not now_transcoding and not upcoming_items %}style="display: none;"{% endif %}>
+            <div class="transcode-queue-panel" id="transcode-queue-panel" {% if not now_transcoding and not
+                upcoming_items %}style="display: none;" {% endif %}>
                 <div class="now-transcoding-block">
                     <span class="queue-block-title">Now Transcoding:</span>
-                    <div class="now-transcoding-name" id="now-transcoding-name">{{ now_transcoding or (job_directory.split('/')[-1] if job_directory else '—') }}</div>
+                    <div class="now-transcoding-name" id="now-transcoding-name">{{ now_transcoding or
+                        (job_directory.split('/')[-1] if job_directory else '—') }}</div>
                 </div>
 
-                <div class="upcoming-items-block" id="upcoming-items-block" {% if not upcoming_items %}style="display: none;"{% endif %}>
+                <div class="upcoming-items-block" id="upcoming-items-block" {% if not upcoming_items
+                    %}style="display: none;" {% endif %}>
                     <span class="queue-block-title">Upcoming items:</span>
                     <ul class="upcoming-items-list" id="upcoming-items-list">
                         {% for u_item in upcoming_items %}
@@ -113,7 +130,8 @@
                 </div>
             </div>
 
-            <div class="progress-log" id="progress-log" style="margin-top: 20px; background: #1e1e1e; border-radius: 6px; padding: 10px; height: 200px; overflow-y: auto; font-family: monospace; font-size: 12px; color: #ccc;">
+            <div class="progress-log" id="progress-log"
+                style="margin-top: 20px; background: #1e1e1e; border-radius: 6px; padding: 10px; height: 200px; overflow-y: auto; font-family: monospace; font-size: 12px; color: #ccc;">
                 <div id="live-log-content">Loading logs...</div>
             </div>
         </div>
@@ -156,7 +174,8 @@
                 <h4>Scheduled Job Queue ({{ upcoming_items|length }} upcoming)</h4>
                 <a href="{{ url_for('scheduler_view') }}" class="btn-scheduler-link">Open Scheduler &rarr;</a>
             </div>
-            <p class="section-description">These items are queued and will begin automatically during the configured time window:</p>
+            <p class="section-description">These items are queued and will begin automatically during the configured
+                time window:</p>
             <div class="upcoming-items-block" style="margin-top: 10px;">
                 <span class="queue-block-title">Upcoming items:</span>
                 <ul class="upcoming-items-list">
@@ -181,8 +200,9 @@
                 <div class="options-inline">
                     <div class="option-group">
                         <label>Quality (CQP):</label>
-                        <input type="range" name="quality" min="18" max="25" step="1" value="23" oninput="this.nextElementSibling.textContent=this.value">
-                        <span>23</span>
+                        <input type="range" name="quality" min="18" max="25" step="1" value="20"
+                            oninput="this.nextElementSibling.textContent=this.value">
+                        <span>20</span>
                     </div>
                     <div class="option-group">
                         <label>Delete originals:</label>
@@ -196,7 +216,8 @@
                     </div>
                 </div>
             </form>
-            <p class="restart-note">This will clean up any partially transcoded files (restore originals, remove incomplete outputs) then re-run the job from scratch on remaining x264 files.</p>
+            <p class="restart-note">This will clean up any partially transcoded files (restore originals, remove
+                incomplete outputs) then re-run the job from scratch on remaining x264 files.</p>
         </div>
         {% endif %}
 
@@ -260,10 +281,12 @@
 
                 <label for="quality" class="tooltip-label">
                     Quality (CQP):
-                    <span class="info-icon" title="18 = best quality (largest file). 25 = smallest file (may be noticeable). 23 = recommended balance."></span>
+                    <span class="info-icon"
+                        title="18 = best quality (largest file). 25 = smallest file (may be noticeable). 23 = recommended balance."></span>
                 </label>
                 <div class="slider-container">
-                    <input type="range" id="quality" name="quality" min="18" max="25" step="1" value="23" oninput="updateQualityValue(this.value)">
+                    <input type="range" id="quality" name="quality" min="18" max="25" step="1" value="23"
+                        oninput="updateQualityValue(this.value)">
                     <span id="quality-value">23</span>
                 </div>
 
@@ -289,12 +312,12 @@
             document.getElementById('quality-value').textContent = value;
         }
 
-        document.addEventListener('DOMContentLoaded', function() {
+        document.addEventListener('DOMContentLoaded', function () {
             // Loading spinner for library form
             const libraryForm = document.getElementById('library-form');
             const loadingIcon = document.getElementById('loading-icon');
             if (libraryForm) {
-                libraryForm.addEventListener('submit', function(event) {
+                libraryForm.addEventListener('submit', function (event) {
                     event.preventDefault();
                     loadingIcon.style.display = 'flex';
                     const formData = new FormData(libraryForm);
@@ -363,7 +386,7 @@
                     if (fileDisplay && currentFile && !currentFile.includes('Loading')) {
                         fileDisplay.innerHTML =
                             '<span class="current-file-label">Now transcoding:</span>' +
-                            '<span class="current-file-name" id="current-file-name">' + currentFile + '</span>';
+                            '<span class="current-file-name" id="current-file-name" title="' + currentFile + '">' + currentFile + '</span>';
                     }
 
                     // Update progress bars
@@ -401,7 +424,7 @@
                         if (data.upcoming_items && data.upcoming_items.length > 0) {
                             upcomingBlock.style.display = 'block';
                             if (queuePanel) queuePanel.style.display = 'block';
-                            upcomingList.innerHTML = data.upcoming_items.map(function(item) {
+                            upcomingList.innerHTML = data.upcoming_items.map(function (item) {
                                 return '<li class="upcoming-item-entry">' +
                                     '<span class="upcoming-item-name">' + item.name + '</span>' +
                                     (item.size ? ' <span class="upcoming-item-size">(' + item.size + ')</span>' : '') +
@@ -416,4 +439,5 @@
         }
     </script>
 </body>
+
 </html>

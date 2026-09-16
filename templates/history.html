@@ -12,7 +12,8 @@
     <!-- Navigation -->
     <nav class="main-nav">
         <div class="nav-brand">x265 Transcoder</div>
-        <div class="nav-links-bar">
+        <button class="mobile-menu-toggle" aria-label="Toggle navigation" onclick="document.getElementById('nav-links').classList.toggle('open')">☰</button>
+        <div class="nav-links-bar" id="nav-links">
             <a href="{{ url_for('index') }}" class="nav-link {% if active_page == 'home' %}active{% endif %}">Transcode</a>
             <a href="{{ url_for('scheduler_view') }}" class="nav-link {% if active_page == 'scheduler' %}active{% endif %}">Scheduler</a>
             <a href="{{ url_for('recommendations') }}" class="nav-link {% if active_page == 'recommendations' %}active{% endif %}">Recommendations</a>
@@ -102,7 +103,7 @@
                         {% for file in selected_files %}
                         <tr class="scan-row-{{ file.status }}">
                             <td title="{{ file.filepath }}">{{ file.filename }}</td>
-                            <td>
+                            <td class="nowrap">
                                 {% if file.status == "success" %}
                                     <span class="status-badge status-success">Success</span>
                                 {% elif file.status == "failed" %}
@@ -111,22 +112,22 @@
                                     <span class="status-badge status-skipped">Skipped</span>
                                 {% endif %}
                             </td>
-                            <td>
+                            <td class="nowrap">
                                 {% if file.original_size_bytes %}
                                     {{ "%.2f"|format(file.original_size_bytes / (1024**3)) }} GB
                                 {% else %}—{% endif %}
                             </td>
-                            <td>
+                            <td class="nowrap">
                                 {% if file.new_size_bytes %}
                                     {{ "%.2f"|format(file.new_size_bytes / (1024**3)) }} GB
                                 {% else %}—{% endif %}
                             </td>
-                            <td>
+                            <td class="nowrap">
                                 {% if file.space_saved_bytes and file.space_saved_bytes > 0 %}
                                     {{ "%.2f"|format(file.space_saved_bytes / (1024**3)) }} GB
                                 {% else %}—{% endif %}
                             </td>
-                            <td>
+                            <td class="nowrap">
                                 {% if file.duration_seconds %}
                                     {% set mins = (file.duration_seconds // 60) | int %}
                                     {% set secs = (file.duration_seconds % 60) | int %}
@@ -164,9 +165,9 @@
                     {% for job in jobs %}
                     <tr>
                         <td title="{{ job.directory }}">{{ job.directory.split('/')[-1] }}</td>
-                        <td>{{ job.started_at[:16] | replace("T", " ") }}</td>
-                        <td>{{ job.successful_count }}/{{ job.failed_count }}/{{ job.skipped_count }}</td>
-                        <td>
+                        <td class="nowrap">{{ job.started_at[:16] | replace("T", " ") }}</td>
+                        <td class="nowrap">{{ job.successful_count }}/{{ job.failed_count }}/{{ job.skipped_count }}</td>
+                        <td class="nowrap">
                             {% if job.status == "success" %}
                                 <span class="status-badge status-success">Success</span>
                             {% elif job.status == "completed_with_failures" %}
@@ -177,13 +178,13 @@
                                 {{ job.status }}
                             {% endif %}
                         </td>
-                        <td>
+                        <td class="nowrap">
                             {% if job.total_space_saved_bytes and job.total_space_saved_bytes > 0 %}
                                 {{ "%.2f"|format(job.total_space_saved_bytes / (1024**3)) }} GB
                             {% else %}—{% endif %}
                         </td>
-                        <td>{{ job.quality }}</td>
-                        <td><a href="{{ url_for('history_detail', job_id=job.id) }}" class="btn-detail">View</a></td>
+                        <td class="nowrap">{{ job.quality }}</td>
+                        <td class="nowrap"><a href="{{ url_for('history_detail', job_id=job.id) }}" class="btn-detail">View</a></td>
                     </tr>
                     {% endfor %}
                 </tbody>

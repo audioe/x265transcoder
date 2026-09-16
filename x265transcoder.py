@@ -65,14 +65,23 @@ if __name__ == '__main__':
         global telegram_token, telegram_chatid
 
         # Telegram API Token and Chat ID
-        token = telegram_token
-        chat_id = telegram_chatid
-        #
-        # Send the message
+        token = str(telegram_token or '').strip()
+        chat_id = str(telegram_chatid or '').strip()
+
+        if not token or not chat_id or token in ('None', '') or chat_id in ('None', ''):
+            logging.info("Telegram notification skipped (token or chat_id not configured).")
+            return None
+
         url = f"https://api.telegram.org/bot{token}/sendMessage"
         data = {"chat_id": chat_id, "text": message}
-        response = requests.post(url, data=data)
-        return response
+        try:
+            response = requests.post(url, data=data, timeout=15)
+            if response.status_code != 200:
+                logging.warning(f"Telegram API returned status {response.status_code}: {response.text}")
+            return response
+        except Exception as e:
+            logging.error(f"Failed to send Telegram message: {e}")
+            return None
     
     # Function for updating the progress
     def update_progress_yaml(item, progress):
@@ -291,7 +300,7 @@ if __name__ == '__main__':
                     logging.info("Confirmed new file is smaller than original")
                     #newfileduration = subprocess.check_output(['mediainfo', '--Inform=General;%Duration%', outputfile]).decode().strip()
                     newfileduration = get_video_duration(outputfile)
-                    duration_tolerance = int(fileduration) * 0.00015  # 0.015% of original duration
+                    duration_tolerance = int(fileduration) * 0.0005 # 0.05% of original duration
                     if (int(newfileduration) <= int(fileduration) - duration_tolerance) or (int(newfileduration) >= int(fileduration) + duration_tolerance):
                         logging.error("ERROR: New file duration does not match original file Duration!")
                         logging.warning(f"New file Duration: {(newfileduration/60000):.2f} min ({newfileduration}) |  Original file Duration: {(fileduration/60000):.2f} min ({fileduration})")
@@ -366,10 +375,31 @@ if __name__ == '__main__':
                 except Exception as e:
                     logging.warning(f"Error checking schedule window: {e}")
         
-        oldfoldersize = round(OldFolderSizeBytes / (1024*1024*1024), 2)
-        newfoldersize = round(NewFolderSizeBytes / (1024*1024*1024), 2)
-        folderpercdiff = round(((NewFolderSizeBytes/OldFolderSizeBytes)-1)*100, 2)
+        oldfoldersize = round(OldFolderSizeBytes / (1024**3), 2)
+        newfoldersize = round(NewFolderSizeBytes / (1024**3), 2)
+        saved_bytes = max(0, OldFolderSizeBytes - NewFolderSizeBytes)
+        saved_gb = round(saved_bytes / (1024**3), 2)
+        saved_pct = round((saved_bytes / OldFolderSizeBytes) * 100, 1) if OldFolderSizeBytes > 0 else 0.0
         TotalFiles = SuccessfulCount + FailedCount + SkippedCount
+
+        # Friendly display name for folder
+        parts = [p for p in mediafolder.replace('\\', '/').split('/') if p]
+        if len(parts) >= 2 and parts[-2].lower() not in ('films', 'shows', 'media'):
+            folder_display = f"{parts[-2]} - {parts[-1]}"
+        elif parts:
+            folder_display = parts[-1]
+        else:
+            folder_display = mediafolder
+
+        # Breakdown summary
+        breakdown = []
+        if SuccessfulCount > 0:
+            breakdown.append(f"{SuccessfulCount} succeeded")
+        if FailedCount > 0:
+            breakdown.append(f"{FailedCount} failed")
+        if SkippedCount > 0:
+            breakdown.append(f"{SkippedCount} skipped")
+        breakdown_str = f" ({', '.join(breakdown)})" if breakdown else ""
 
         # Update scheduled job status if running in scheduled mode
         if scheduled_job_id is not None:
@@ -393,15 +423,45 @@ if __name__ == '__main__':
 
         if window_ended:
             logging.info("Window ended. Sending Telegram update...")
-            send_telegram_message(f"Scheduled transcode window ended for {mediafolder}.\nFinished current file.\n{SuccessfulCount} file(s) completed so far. Outstanding files will automatically resume in the next window.")
+            failures_icon = "✅" if FailedCount == 0 else "❌"
+            failures_status = "None" if FailedCount == 0 else f"Yes ({FailedCount} failed)"
+            msg = (
+                f"⏳ Scheduled Transcode Window Ended: {folder_display}\n"
+                f"📁 Path: {mediafolder}\n\n"
+                f"Schedule window closed. Finished current file.\n"
+                f"Outstanding files will automatically resume in the next window.\n\n"
+                f"📄 Number of files: {TotalFiles} of {total_files} processed{breakdown_str}\n"
+                f"{failures_icon} Failures: {failures_status}\n"
+                f"💾 Total size saved so far: {saved_gb} GB ({saved_pct}%)\n"
+                f"📊 Original Size: {oldfoldersize} GB ➔ New Size: {newfoldersize} GB"
+            )
+            send_telegram_message(msg)
         elif FailedCount > 0:
             logging.warning(f"Some Jobs May have Failed: {Failed}")
             logging.info("Sending Telegram Message...")
-            send_telegram_message(f"Transcode Job for {mediafolder} completed with failures.\n\n{SuccessfulCount} Succeeded | {FailedCount} Failed | {SkippedCount} Skipped\n\nThe following files failed verification: {Failed}")
+            failed_list = "\n".join(f"• {os.path.basename(str(f))}" for f in Failed)
+            msg = (
+                f"⚠️ Transcode Completed with Failures: {folder_display}\n"
+                f"📁 Path: {mediafolder}\n\n"
+                f"📄 Number of files: {TotalFiles}{breakdown_str}\n"
+                f"❌ Failures: Yes ({FailedCount} failed)\n"
+                f"💾 Total size saved: {saved_gb} GB ({saved_pct}%)\n"
+                f"📊 Original Size: {oldfoldersize} GB ➔ New Size: {newfoldersize} GB\n\n"
+                f"Failed files:\n{failed_list}"
+            )
+            send_telegram_message(msg)
         else:
             logging.info(f"All Jobs Succeeded: {Successful}")
             logging.info("Sending Telegram Message...")
-            send_telegram_message(f"Transcode Job for {mediafolder} completed successfully.\n\n{SuccessfulCount} Succeeded | {SkippedCount} Skipped\n\nOriginal Directory Size: {oldfoldersize} GB\nNew Directory Size: {newfoldersize} GB\nSpace Saved: {folderpercdiff}%")
+            msg = (
+                f"🎬 Transcode Completed: {folder_display}\n"
+                f"📁 Path: {mediafolder}\n\n"
+                f"📄 Number of files: {TotalFiles}{breakdown_str}\n"
+                f"✅ Failures: None\n"
+                f"💾 Total size saved: {saved_gb} GB ({saved_pct}%)\n"
+                f"📊 Original Size: {oldfoldersize} GB ➔ New Size: {newfoldersize} GB"
+            )
+            send_telegram_message(msg)
 
         # If job completed successfully, run an incremental recommendations scan to remove transcoded items
         if FailedCount == 0 and not window_ended:
