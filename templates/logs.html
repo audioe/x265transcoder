@@ -27,6 +27,9 @@
             border-radius: 4px;
             margin-bottom: 5px;
             color: #ddd;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }
         .log-item:hover {
             background: #333;
@@ -46,6 +49,19 @@
             color: #ccc;
             white-space: pre-wrap;
             border: 1px solid #333;
+        }
+        @media (max-width: 768px) {
+            .log-container {
+                flex-direction: column;
+                height: calc(100vh - 120px);
+            }
+            .log-list {
+                flex: none;
+                height: 150px;
+            }
+            .log-viewer {
+                flex: 1;
+            }
         }
     </style>
     <link rel="manifest" href="/manifest.json">
@@ -75,7 +91,7 @@
         <div class="log-container">
             <div class="log-list">
                 {% for log in log_files %}
-                <div class="log-item" onclick="viewLog('{{ log.name }}', this)">
+                <div class="log-item" onclick="viewLog('{{ log.name }}', this)" title="{{ log.name }}">
                     {{ log.name }} ({{ (log.size / 1024)|round(1) }} KB)
                 </div>
                 {% endfor %}

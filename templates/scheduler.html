@@ -145,34 +145,34 @@
                 <table class="recommendations-table queue-table">
                     <thead>
                         <tr>
-                            <th style="width: 50px;">Order</th>
+                            <th style="width: 50px;" class="nowrap">Order</th>
                             <th>Item Name</th>
-                            <th>Type</th>
-                            <th>Size</th>
-                            <th>Est. Time</th>
-                            <th>Window Fit</th>
-                            <th>Status</th>
-                            <th style="width: 140px;">Actions</th>
+                            <th class="nowrap">Type</th>
+                            <th class="nowrap">Size</th>
+                            <th class="nowrap">Est. Time</th>
+                            <th class="nowrap">Window Fit</th>
+                            <th class="nowrap">Status</th>
+                            <th style="width: 140px;" class="nowrap">Actions</th>
                         </tr>
                     </thead>
                     <tbody>
                         {% for item in queue %}
                         <tr class="{% if item.status == 'running' %}row-running{% endif %}">
-                            <td class="order-col"><strong>#{{ loop.index }}</strong></td>
+                            <td class="order-col nowrap"><strong>#{{ loop.index }}</strong></td>
                             <td>
                                 <strong>{{ item.item_name }}</strong>
-                                <div class="queue-item-dir">{{ item.directory }}</div>
+                                <div class="queue-item-dir" title="{{ item.directory }}">{{ item.directory }}</div>
                                 {% if item.status == 'paused' %}
                                     <div class="queue-item-paused-note">&#9208; {{ item.total_files }} file{% if item.total_files != 1 %}s{% endif %} remaining</div>
                                 {% endif %}
                             </td>
-                            <td>
+                            <td class="nowrap">
                                 <span class="badge-type badge-{{ item.category }}">{{ item.category | capitalize }}</span>
                                 {% if item.season %}<span class="badge-season">{{ item.season }}</span>{% endif %}
                             </td>
-                            <td>{{ item.size_gb }} GB</td>
-                            <td>{{ item.estimated_duration_formatted }}</td>
-                            <td>
+                            <td class="nowrap">{{ item.size_gb }} GB</td>
+                            <td class="nowrap">{{ item.estimated_duration_formatted }}</td>
+                            <td class="nowrap">
                                 {% if item.status == 'running' %}
                                     <span class="status-badge status-running">Transcoding Now</span>
                                 {% elif item.will_fit %}
@@ -181,7 +181,7 @@
                                     <span class="fit-badge fit-no" title="Will carry over to next window">&#9654; Next Window</span>
                                 {% endif %}
                             </td>
-                            <td>
+                            <td class="nowrap">
                                 {% if item.status == 'running' %}
                                     <span class="status-badge status-running">Running</span>
                                 {% elif item.status == 'paused' %}
@@ -190,7 +190,7 @@
                                     <span class="status-badge status-queued">Queued</span>
                                 {% endif %}
                             </td>
-                            <td class="action-buttons">
+                            <td class="action-buttons nowrap">
                                 <div class="queue-actions-inline">
                                     <form method="post" action="{{ url_for('scheduler_reorder_job_route', job_id=item.id, direction='up') }}" style="display:inline;">
                                         <button type="submit" class="btn-order" {% if loop.first or item.status == 'running' %}disabled{% endif %} title="Move Up">&uarr;</button>
@@ -230,12 +230,12 @@
                     <thead>
                         <tr>
                             <th>Show</th>
-                            <th>Season</th>
-                            <th>Episodes</th>
-                            <th>x264</th>
-                            <th>Total Size</th>
-                            <th>Est. Duration</th>
-                            <th style="width: 140px;">Action</th>
+                            <th class="nowrap">Season</th>
+                            <th class="nowrap">Episodes</th>
+                            <th class="nowrap">x264</th>
+                            <th class="nowrap">Total Size</th>
+                            <th class="nowrap">Est. Duration</th>
+                            <th style="width: 140px;" class="nowrap">Action</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -246,18 +246,18 @@
                         {% set est_m = (est_dur_mins % 60) %}
                         <tr>
                             <td><strong>{{ show.title }}</strong></td>
-                            <td>{{ show.season or "All" }}</td>
-                            <td>{{ show.total_episodes }}</td>
-                            <td>
+                            <td class="nowrap">{{ show.season or "All" }}</td>
+                            <td class="nowrap">{{ show.total_episodes }}</td>
+                            <td class="nowrap">
                                 {% if show.x264_episodes == show.total_episodes %}
                                     <span class="badge-all-x264">All x264</span>
                                 {% else %}
                                     <span class="badge-partial-x264">{{ show.x264_episodes }} of {{ show.total_episodes }}</span>
                                 {% endif %}
                             </td>
-                            <td>{{ "%.2f"|format(show.total_bytes / (1024**3)) }} GB</td>
-                            <td>{% if est_h > 0 %}{{ est_h }}h {{ est_m }}m{% else %}{{ est_m }}m{% endif %}</td>
-                            <td>
+                            <td class="nowrap">{{ "%.2f"|format(show.total_bytes / (1024**3)) }} GB</td>
+                            <td class="nowrap">{% if est_h > 0 %}{{ est_h }}h {{ est_m }}m{% else %}{{ est_m }}m{% endif %}</td>
+                            <td class="nowrap">
                                 {% if is_queued %}
                                     <button type="button" class="btn-queued" disabled>Already Queued</button>
                                 {% else %}
@@ -289,9 +289,9 @@
                         <tr>
                             <th>Title</th>
                             <th>Filename</th>
-                            <th>Size</th>
-                            <th>Est. Duration</th>
-                            <th style="width: 140px;">Action</th>
+                            <th class="nowrap">Size</th>
+                            <th class="nowrap">Est. Duration</th>
+                            <th style="width: 140px;" class="nowrap">Action</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -302,10 +302,10 @@
                         {% set est_m = (est_dur_mins % 60) %}
                         <tr>
                             <td><strong>{{ film.title }}</strong></td>
-                            <td class="text-truncate">{{ film.filename }}</td>
-                            <td>{{ "%.2f"|format(film.size_bytes / (1024**3)) }} GB</td>
-                            <td>{% if est_h > 0 %}{{ est_h }}h {{ est_m }}m{% else %}{{ est_m }}m{% endif %}</td>
-                            <td>
+                            <td class="text-truncate" title="{{ film.filename }}">{{ film.filename }}</td>
+                            <td class="nowrap">{{ "%.2f"|format(film.size_bytes / (1024**3)) }} GB</td>
+                            <td class="nowrap">{% if est_h > 0 %}{{ est_h }}h {{ est_m }}m{% else %}{{ est_m }}m{% endif %}</td>
+                            <td class="nowrap">
                                 {% if is_queued %}
                                     <button type="button" class="btn-queued" disabled>Already Queued</button>
                                 {% else %}
@@ -371,18 +371,18 @@
                     <thead>
                         <tr>
                             <th>Item Name</th>
-                            <th>Type</th>
-                            <th>Finished At</th>
-                            <th>Status</th>
+                            <th class="nowrap">Type</th>
+                            <th class="nowrap">Finished At</th>
+                            <th class="nowrap">Status</th>
                         </tr>
                     </thead>
                     <tbody>
                         {% for pjob in past_jobs %}
                         <tr>
                             <td>{{ pjob.item_name }}</td>
-                            <td>{{ pjob.category | capitalize }}</td>
-                            <td>{{ pjob.completed_at[:16] | replace('T', ' ') if pjob.completed_at else '—' }}</td>
-                            <td>
+                            <td class="nowrap">{{ pjob.category | capitalize }}</td>
+                            <td class="nowrap">{{ pjob.completed_at[:16] | replace('T', ' ') if pjob.completed_at else '—' }}</td>
+                            <td class="nowrap">
                                 {% if pjob.status == 'completed' %}
                                     <span class="status-badge status-success">Completed</span>
                                 {% else %}

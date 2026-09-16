@@ -1555,6 +1555,19 @@ progress::-moz-progress-bar {
         padding: 10px 10px;
         font-size: 0.82em;
     }
+
+    .scheduler-section {
+        padding: 16px;
+        margin-top: 20px !important;
+    }
+
+    .scheduler-card,
+    .progress-panel,
+    .stats-panel,
+    .scan-status-panel,
+    .history-detail-panel {
+        padding: 16px;
+    }
 }
 
 /* Mobile */
@@ -1633,6 +1646,29 @@ progress::-moz-progress-bar {
     .recommendations-table td {
         padding: 12px 10px;
         font-size: 0.82em;
+    }
+
+    .scheduler-container {
+        padding: 0;
+    }
+
+    .scheduler-section {
+        padding: 16px;
+        margin-top: 20px !important;
+        border-radius: 0;
+        border-left: none;
+        border-right: none;
+    }
+
+    .scheduler-card,
+    .progress-panel,
+    .stats-panel,
+    .scan-status-panel,
+    .history-detail-panel {
+        padding: 16px;
+        border-radius: 0;
+        border-left: none;
+        border-right: none;
     }
 
     .btn-transcode, .btn-detail, .btn-scan {
