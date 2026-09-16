@@ -276,6 +276,30 @@ def mark_job_queued(job_id):
     conn.close()
 
 
+def mark_job_paused(job_id, remaining_count=None, remaining_bytes=None):
+    """
+    Mark a scheduled job as 'paused' when the schedule window closes,
+    updating its total_files and estimated_size_bytes to reflect only
+    the remaining uncompleted files.
+    """
+    init_scheduler_schema()
+    conn = _get_connection()
+    if remaining_count is not None and remaining_bytes is not None:
+        conn.execute("""
+            UPDATE scheduled_jobs
+            SET status = 'paused', total_files = ?, estimated_size_bytes = ?
+            WHERE id = ?
+        """, (int(remaining_count), int(remaining_bytes), int(job_id)))
+    else:
+        conn.execute("""
+            UPDATE scheduled_jobs
+            SET status = 'paused'
+            WHERE id = ?
+        """, (int(job_id),))
+    conn.commit()
+    conn.close()
+
+
 def mark_job_failed(job_id, error_message=None):
     """Mark a scheduled job as failed."""
     init_scheduler_schema()

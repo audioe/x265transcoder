@@ -7,6 +7,10 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+    <link rel="manifest" href="/manifest.json">
+    <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='favicon.ico') }}">
+    <link rel="apple-touch-icon" href="{{ url_for('static', filename='icon-192.png') }}">
+    <meta name="theme-color" content="#1e1e1e">
 </head>
 <body>
     <!-- Navigation -->
@@ -158,6 +162,9 @@
                             <td>
                                 <strong>{{ item.item_name }}</strong>
                                 <div class="queue-item-dir">{{ item.directory }}</div>
+                                {% if item.status == 'paused' %}
+                                    <div class="queue-item-paused-note">&#9208; {{ item.total_files }} file{% if item.total_files != 1 %}s{% endif %} remaining</div>
+                                {% endif %}
                             </td>
                             <td>
                                 <span class="badge-type badge-{{ item.category }}">{{ item.category | capitalize }}</span>
@@ -178,7 +185,7 @@
                                 {% if item.status == 'running' %}
                                     <span class="status-badge status-running">Running</span>
                                 {% elif item.status == 'paused' %}
-                                    <span class="status-badge status-warning">Paused</span>
+                                    <span class="status-badge status-paused" title="Schedule window ended. Remaining files will automatically resume in the next window.">Paused</span>
                                 {% else %}
                                     <span class="status-badge status-queued">Queued</span>
                                 {% endif %}
@@ -392,5 +399,32 @@
         {% endif %}
 
     </div>
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/sw.js').then(registration => {
+                    console.log('ServiceWorker registration successful with scope: ', registration.scope);
+                    
+                    registration.addEventListener('updatefound', () => {
+                        const newWorker = registration.installing;
+                        newWorker.addEventListener('statechange', () => {
+                            if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                                console.log('New update available');
+                            }
+                        });
+                    });
+                }).catch(err => {
+                    console.log('ServiceWorker registration failed: ', err);
+                });
+
+                let refreshing;
+                navigator.serviceWorker.addEventListener('controllerchange', () => {
+                    if (refreshing) return;
+                    window.location.reload();
+                    refreshing = true;
+                });
+            });
+        }
+    </script>
 </body>
 </html>

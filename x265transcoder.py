@@ -404,10 +404,13 @@ if __name__ == '__main__':
         # Update scheduled job status if running in scheduled mode
         if scheduled_job_id is not None:
             try:
-                from modules.scheduler import mark_job_queued, mark_job_completed
+                from modules.scheduler import mark_job_paused, mark_job_completed
                 if window_ended:
-                    logging.info(f"Scheduled job #{scheduled_job_id} paused at window close. Re-queueing for next window.")
-                    mark_job_queued(scheduled_job_id)
+                    remaining_files = file_list[i + 1:]
+                    remaining_count = len(remaining_files)
+                    remaining_bytes = sum(os.path.getsize(f) for f in remaining_files if os.path.exists(f))
+                    logging.info(f"Scheduled job #{scheduled_job_id} paused at window close ({remaining_count} files remaining, {round(remaining_bytes/(1024**3), 2)} GB). Marking paused for next window.")
+                    mark_job_paused(scheduled_job_id, remaining_count=remaining_count, remaining_bytes=remaining_bytes)
                 else:
                     logging.info(f"Scheduled job #{scheduled_job_id} completed all files.")
                     mark_job_completed(scheduled_job_id)

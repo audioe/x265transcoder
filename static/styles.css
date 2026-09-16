@@ -1125,6 +1125,25 @@ progress::-moz-progress-bar {
     border: 1px solid rgba(148, 163, 184, 0.3);
 }
 
+.status-paused {
+    background: rgba(237, 137, 54, 0.15);
+    color: var(--accent-orange);
+    border: 1px solid rgba(237, 137, 54, 0.3);
+}
+
+.status-queued {
+    background: rgba(148, 163, 184, 0.15);
+    color: var(--text-secondary);
+    border: 1px solid rgba(148, 163, 184, 0.3);
+}
+
+.queue-item-paused-note {
+    font-size: 0.78em;
+    color: var(--accent-orange);
+    font-weight: 600;
+    margin-top: 4px;
+}
+
 /* x264 Badges */
 .badge-all-x264 {
     display: inline-block;

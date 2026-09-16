@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, jsonify, redirect, url_for
+from flask import Flask, render_template, request, jsonify, redirect, url_for, send_from_directory, make_response
 import subprocess
 import os
 import shutil
@@ -152,6 +152,16 @@ def store_job(job_data):
 #        # Append the job data to the file
 #        f.write(job_data)
 
+
+@app.route('/manifest.json')
+def manifest():
+    return send_from_directory('static', 'manifest.json')
+
+@app.route('/sw.js')
+def service_worker():
+    response = make_response(send_from_directory('static', 'sw.js'))
+    response.headers['Cache-Control'] = 'no-cache'
+    return response
 
 # Route to render the HTML page
 @app.route('/')
