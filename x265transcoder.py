@@ -196,7 +196,6 @@ if __name__ == '__main__':
             logging.info(f"Original Codec: {videocodec}")
             filesizeinbytes = os.path.getsize(file_path)
             logging.info(f"Original Size: {filesizeinbytes} bytes")
-            OldFolderSizeBytes += filesizeinbytes
             filesize = round(filesizeinbytes / (1024*1024*1024), 2)
             logging.info(f"Original Size: {filesize} GB")
             #fileframecount = subprocess.check_output(['mediainfo', '--Inform=Video;%FrameCount%', file_path]).decode().strip()
@@ -208,6 +207,7 @@ if __name__ == '__main__':
             # Check if file is x264
             if videocodec == "Advanced Video Codec" or videocodec == "AVC":
                 logging.info("This is an x264 file.")
+                OldFolderSizeBytes += filesizeinbytes
                 logging.info(f"Renaming to `{convertedname}_old`")
                 # Rename file to include _old
                 shutil.move(file_path, amendedname_path)
@@ -351,7 +351,6 @@ if __name__ == '__main__':
 
             elif videocodec == "High Efficiency Video Coding" or videocodec == "HEVC":
                 logging.info("This is an x265 file.  Skipping")
-                NewFolderSizeBytes += filesizeinbytes
                 SkippedCount += 1
                 # Record skipped file in history
                 category, title, season = derive_metadata(file_path, mediafolder)
@@ -424,6 +423,8 @@ if __name__ == '__main__':
         complete_job(history_job_id, TotalFiles, SuccessfulCount, FailedCount, SkippedCount,
                      OldFolderSizeBytes, NewFolderSizeBytes)
 
+        size_label = "Transcoded Files" if SkippedCount > 0 else "Original Size"
+
         if window_ended:
             logging.info("Window ended. Sending Telegram update...")
             failures_icon = "✅" if FailedCount == 0 else "❌"
@@ -436,7 +437,7 @@ if __name__ == '__main__':
                 f"📄 Number of files: {TotalFiles} of {total_files} processed{breakdown_str}\n"
                 f"{failures_icon} Failures: {failures_status}\n"
                 f"💾 Total size saved so far: {saved_gb} GB ({saved_pct}%)\n"
-                f"📊 Original Size: {oldfoldersize} GB ➔ New Size: {newfoldersize} GB"
+                f"📊 {size_label}: {oldfoldersize} GB ➔ New Size: {newfoldersize} GB"
             )
             send_telegram_message(msg)
         elif FailedCount > 0:
@@ -449,7 +450,7 @@ if __name__ == '__main__':
                 f"📄 Number of files: {TotalFiles}{breakdown_str}\n"
                 f"❌ Failures: Yes ({FailedCount} failed)\n"
                 f"💾 Total size saved: {saved_gb} GB ({saved_pct}%)\n"
-                f"📊 Original Size: {oldfoldersize} GB ➔ New Size: {newfoldersize} GB\n\n"
+                f"📊 {size_label}: {oldfoldersize} GB ➔ New Size: {newfoldersize} GB\n\n"
                 f"Failed files:\n{failed_list}"
             )
             send_telegram_message(msg)
@@ -462,7 +463,7 @@ if __name__ == '__main__':
                 f"📄 Number of files: {TotalFiles}{breakdown_str}\n"
                 f"✅ Failures: None\n"
                 f"💾 Total size saved: {saved_gb} GB ({saved_pct}%)\n"
-                f"📊 Original Size: {oldfoldersize} GB ➔ New Size: {newfoldersize} GB"
+                f"📊 {size_label}: {oldfoldersize} GB ➔ New Size: {newfoldersize} GB"
             )
             send_telegram_message(msg)
 
