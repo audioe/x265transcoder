@@ -7,7 +7,7 @@ import logging
 import threading
 from apscheduler.schedulers.background import BackgroundScheduler
 from modules.scanner import run_scan, get_recommendations, get_scan_status, get_scan_history
-from modules.history import get_job_history, get_job_files, get_lifetime_stats
+from modules.history import get_job_history, get_job_files, get_lifetime_stats, reconcile_stale_history_jobs
 from modules.scheduler import (
     get_schedule_config,
     save_schedule_config,
@@ -19,6 +19,7 @@ from modules.scheduler import (
     clear_completed_jobs,
     get_next_queued_job,
     mark_job_running,
+    reconcile_stale_scheduled_jobs,
     is_in_schedule_window,
     get_queue_estimates,
     get_now_and_upcoming_display,
@@ -168,6 +169,8 @@ def service_worker():
 def index():
     load_config()
     transcoder_status = transcode_check('x265transcoder.py')
+    if not transcoder_status:
+        reconcile_if_idle()
     job_directory = ''
     job_progress = ''
     file_progress = ''
@@ -405,6 +408,9 @@ def cleanup_interrupted_transcodes(directory):
     Returns a count of files restored.
     """
     restored = 0
+    if not directory or not os.path.exists(directory):
+        return restored
+
     for dirpath, _, filenames in os.walk(directory):
         for filename in filenames:
             if not filename.endswith("_old"):
@@ -421,6 +427,21 @@ def cleanup_interrupted_transcodes(directory):
             else:
                 output_filename = original_filename
             output_filepath = os.path.join(dirpath, output_filename)
+
+            # Do not overwrite if this file already completed or was verified as x265 in transcode_files
+            try:
+                import sqlite3
+                if os.path.exists("/config/media.db"):
+                    conn = sqlite3.connect("/config/media.db", timeout=10)
+                    already_done = conn.execute(
+                        "SELECT 1 FROM transcode_files WHERE filename IN (?, ?) AND status IN ('success', 'skipped') LIMIT 1",
+                        (original_filename, output_filename)
+                    ).fetchone()
+                    conn.close()
+                    if already_done:
+                        continue
+            except Exception:
+                pass
 
             # Delete the partial output file if it exists
             if os.path.exists(output_filepath) and output_filepath != original_filepath:
@@ -441,10 +462,34 @@ def cleanup_interrupted_transcodes(directory):
             try:
                 shutil.move(old_filepath, original_filepath)
                 restored += 1
+                # If a library scan indexed the partial output as x265, restore media_files record
+                try:
+                    import sqlite3
+                    if os.path.exists("/config/media.db"):
+                        restored_size = os.path.getsize(original_filepath)
+                        conn = sqlite3.connect("/config/media.db", timeout=10)
+                        conn.execute(
+                            "UPDATE media_files SET codec = 'x264', size_bytes = ? WHERE filepath = ? OR filename IN (?, ?)",
+                            (restored_size, original_filepath, original_filename, output_filename)
+                        )
+                        conn.commit()
+                        conn.close()
+                except Exception:
+                    pass
             except OSError:
                 pass
 
     return restored
+
+
+def reconcile_if_idle():
+    """If no transcoder process is active, reconcile any orphaned 'running' records in SQLite."""
+    try:
+        if not transcode_check('x265transcoder.py'):
+            reconcile_stale_scheduled_jobs(cleanup_fn=cleanup_interrupted_transcodes)
+            reconcile_stale_history_jobs()
+    except Exception as e:
+        scheduler_logger.warning(f"Error reconciling stale jobs: {e}")
 
 
 # Route to restart a previously interrupted job (with cleanup)
@@ -507,6 +552,9 @@ def check_and_run_scheduled_jobs():
         if transcode_check('x265transcoder.py'):
             return
 
+        # Reconcile any orphaned 'running' jobs when transcoder is idle
+        reconcile_if_idle()
+
         # 2. Check if inside scheduled time window and scheduler is enabled
         if not is_in_schedule_window():
             return
@@ -521,6 +569,9 @@ def check_and_run_scheduled_jobs():
         quality = str(next_job.get('quality', 23))
         delete = next_job.get('delete_originals', 'Yes')
         include = '.mkv'
+
+        # Clean up any leftover *_old files before starting or resuming the scheduled job
+        cleanup_interrupted_transcodes(folder)
 
         load_config()
         telegram_token = get_secret("TELEGRAM_TOKEN")
@@ -566,10 +617,12 @@ def _normalize_dir(d):
 @app.route('/recommendations')
 def recommendations():
     load_config()
+    transcoder_running = transcode_check('x265transcoder.py')
+    if not transcoder_running:
+        reconcile_if_idle()
     data = get_recommendations(limit=50)
     scan_status = get_scan_status()
     history = get_scan_history(limit=10)
-    transcoder_running = transcode_check('x265transcoder.py')
 
     active_job_directory = ''
     if transcoder_running and os.path.exists('/config/job.yaml'):
@@ -685,6 +738,8 @@ def scan_status_endpoint():
 def job_status_endpoint():
     """JSON endpoint for polling transcode job progress."""
     transcoder_status = transcode_check('x265transcoder.py')
+    if not transcoder_status:
+        reconcile_if_idle()
     result = {'running': transcoder_status}
     job_directory = ''
     if transcoder_status:
@@ -724,6 +779,7 @@ def job_status_endpoint():
 
 @app.route('/history')
 def history():
+    reconcile_if_idle()
     jobs = get_job_history(limit=20)
     stats = get_lifetime_stats()
     return render_template('history.html', version=version, jobs=jobs, stats=stats, active_page='history')
@@ -731,6 +787,7 @@ def history():
 
 @app.route('/history/<int:job_id>')
 def history_detail(job_id):
+    reconcile_if_idle()
     jobs = get_job_history(limit=20)
     # Find the specific job summary
     job = None
@@ -804,10 +861,12 @@ def api_logs_view(log_file):
 @app.route('/scheduler')
 def scheduler_view():
     load_config()
+    transcoder_running = transcode_check('x265transcoder.py')
+    if not transcoder_running:
+        reconcile_if_idle()
     estimates = get_queue_estimates()
     all_jobs = get_all_scheduled_jobs(limit=20)
     recommendations_data = get_recommendations(limit=100)
-    transcoder_running = transcode_check('x265transcoder.py')
 
     queued_directories = {item['directory'] for item in estimates['queue']}
     sched_cfg = get_schedule_config()

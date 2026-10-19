@@ -314,6 +314,82 @@ def mark_job_failed(job_id, error_message=None):
     conn.close()
 
 
+def reconcile_stale_scheduled_jobs(cleanup_fn=None):
+    """
+    Reconcile any scheduled_jobs left in 'running' state when x265transcoder.py is not active.
+    Restores any interrupted *_old files via cleanup_fn and transitions the jobs to 'paused'
+    with updated remaining file counts/sizes so they automatically resume in the next window.
+    """
+    init_scheduler_schema()
+    if not os.path.exists(DB_PATH):
+        return 0
+    conn = _get_connection()
+    running_rows = conn.execute("""
+        SELECT * FROM scheduled_jobs WHERE status = 'running'
+    """).fetchall()
+    if not running_rows:
+        conn.close()
+        return 0
+
+    reconciled = 0
+    for job in running_rows:
+        job_id = job["id"]
+        directory = job["directory"]
+        restored = 0
+        if cleanup_fn and directory:
+            try:
+                restored = cleanup_fn(directory) or 0
+            except Exception as e:
+                logger.warning(f"Cleanup failed for stale scheduled job #{job_id} ({directory}): {e}")
+
+        rem_count = None
+        rem_bytes = None
+        try:
+            dir_prefix = directory.rstrip("/\\") + "/%"
+            mf_row = conn.execute("""
+                SELECT
+                    COUNT(*) as total_indexed,
+                    SUM(CASE WHEN codec = 'x264' AND filepath NOT IN (
+                        SELECT filepath FROM transcode_files WHERE status = 'success'
+                    ) THEN 1 ELSE 0 END) as x264_rem,
+                    COALESCE(SUM(CASE WHEN codec = 'x264' AND filepath NOT IN (
+                        SELECT filepath FROM transcode_files WHERE status = 'success'
+                    ) THEN size_bytes ELSE 0 END), 0) as x264_bytes
+                FROM media_files
+                WHERE filepath LIKE ?
+            """, (dir_prefix,)).fetchone()
+            if mf_row and (mf_row["total_indexed"] or 0) > 0:
+                x264_rem = max(mf_row["x264_rem"] or 0, restored)
+                if x264_rem > 0:
+                    rem_count = x264_rem
+                    rem_bytes = mf_row["x264_bytes"] or job["estimated_size_bytes"] or 0
+        except Exception as e:
+            logger.debug(f"Could not query media_files for stale job #{job_id}: {e}")
+
+        if rem_count is not None and rem_bytes is not None:
+            conn.execute("""
+                UPDATE scheduled_jobs
+                SET status = 'paused', total_files = ?, estimated_size_bytes = ?
+                WHERE id = ?
+            """, (int(rem_count), int(rem_bytes), int(job_id)))
+        else:
+            conn.execute("""
+                UPDATE scheduled_jobs
+                SET status = 'paused'
+                WHERE id = ?
+            """, (int(job_id),))
+
+        logger.warning(
+            f"Reconciled stale running scheduled job #{job_id} ({job['item_name']}) -> paused "
+            f"(remaining_files={rem_count if rem_count is not None else job['total_files']})"
+        )
+        reconciled += 1
+
+    conn.commit()
+    conn.close()
+    return reconciled
+
+
 # --- Window & Timing Calculations ---
 
 def _parse_time_str(time_str):

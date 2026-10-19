@@ -147,6 +147,61 @@ def complete_job(job_id, total_files, successful_count, failed_count, skipped_co
     conn.close()
 
 
+def reconcile_stale_history_jobs():
+    """
+    Find any transcode_jobs stuck in 'running' status when no transcoder process is active
+    and mark them as 'completed_with_failures' using any recorded per-file stats.
+    """
+    _init_schema()
+    if not os.path.exists(DB_PATH):
+        return 0
+    conn = _get_connection()
+    running_rows = conn.execute("""
+        SELECT id, total_files FROM transcode_jobs WHERE status = 'running'
+    """).fetchall()
+    if not running_rows:
+        conn.close()
+        return 0
+
+    now = datetime.now(timezone.utc).isoformat()
+    reconciled = 0
+    for job in running_rows:
+        job_id = job["id"]
+        agg = conn.execute("""
+            SELECT
+                COUNT(*) as recorded_files,
+                SUM(CASE WHEN status = 'success' THEN 1 ELSE 0 END) as succ,
+                SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END) as fail,
+                SUM(CASE WHEN status = 'skipped' THEN 1 ELSE 0 END) as skip,
+                COALESCE(SUM(CASE WHEN status IN ('success', 'failed') THEN original_size_bytes ELSE 0 END), 0) as orig_bytes,
+                COALESCE(SUM(CASE WHEN status IN ('success', 'failed') THEN new_size_bytes ELSE 0 END), 0) as new_bytes
+            FROM transcode_files
+            WHERE job_id = ?
+        """, (job_id,)).fetchone()
+
+        succ = (agg["succ"] or 0) if agg else 0
+        fail = max(1, (agg["fail"] or 0) if agg else 0)
+        skip = (agg["skip"] or 0) if agg else 0
+        orig_bytes = (agg["orig_bytes"] or 0) if agg else 0
+        new_bytes = (agg["new_bytes"] or 0) if agg else 0
+        space_saved = max(0, orig_bytes - new_bytes)
+        total_files = max(job["total_files"] or 0, succ + fail + skip)
+
+        conn.execute("""
+            UPDATE transcode_jobs
+            SET completed_at = ?, total_files = ?, successful_count = ?,
+                failed_count = ?, skipped_count = ?, total_original_bytes = ?,
+                total_new_bytes = ?, total_space_saved_bytes = ?,
+                status = 'completed_with_failures'
+            WHERE id = ?
+        """, (now, total_files, succ, fail, skip, orig_bytes, new_bytes, space_saved, job_id))
+        reconciled += 1
+
+    conn.commit()
+    conn.close()
+    return reconciled
+
+
 # --- Query functions (called from flaskapp.py) ---
 
 def get_job_history(limit=20):

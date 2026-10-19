@@ -193,13 +193,13 @@
                             <td class="action-buttons nowrap">
                                 <div class="queue-actions-inline">
                                     <form method="post" action="{{ url_for('scheduler_reorder_job_route', job_id=item.id, direction='up') }}" style="display:inline;">
-                                        <button type="submit" class="btn-order" {% if loop.first or item.status == 'running' %}disabled{% endif %} title="Move Up">&uarr;</button>
+                                        <button type="submit" class="btn-order" {% if loop.first or (item.status == 'running' and transcoder_running) %}disabled{% endif %} title="Move Up">&uarr;</button>
                                     </form>
                                     <form method="post" action="{{ url_for('scheduler_reorder_job_route', job_id=item.id, direction='down') }}" style="display:inline;">
-                                        <button type="submit" class="btn-order" {% if loop.last or item.status == 'running' %}disabled{% endif %} title="Move Down">&darr;</button>
+                                        <button type="submit" class="btn-order" {% if loop.last or (item.status == 'running' and transcoder_running) %}disabled{% endif %} title="Move Down">&darr;</button>
                                     </form>
                                     <form method="post" action="{{ url_for('scheduler_remove_job_route', job_id=item.id) }}" style="display:inline;" onsubmit="return confirm('Remove {{ item.item_name }} from queue?');">
-                                        <button type="submit" class="btn-cancel" {% if item.status == 'running' %}disabled{% endif %} title="Remove from Queue">&times;</button>
+                                        <button type="submit" class="btn-cancel" {% if item.status == 'running' and transcoder_running %}disabled{% endif %} title="Remove from Queue">&times;</button>
                                     </form>
                                 </div>
                             </td>

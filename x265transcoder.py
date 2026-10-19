@@ -2,6 +2,7 @@ import sys
 import subprocess
 import shutil
 import os
+import signal
 import yaml
 from datetime import datetime
 import requests
@@ -47,12 +48,19 @@ if __name__ == '__main__':
     Logfile = f"{Logfilepath}/transcode_{Date}.log"
     logging.basicConfig(format='%(levelname)s | %(asctime)s: %(message)s', datefmt='%d/%m/%Y %I:%M:%S %p', filename=Logfile, encoding='utf-8', level=logging.DEBUG)
 
+    def _handle_termination_signal(signum, frame):
+        logging.warning(f"Received signal {signum}. Cleaning up and exiting...")
+        raise SystemExit(128 + signum)
+
+    signal.signal(signal.SIGTERM, _handle_termination_signal)
+    signal.signal(signal.SIGINT, _handle_termination_signal)
+
     def store_job(item, job_data):
         logging.debug(f"Storing {item}: {job_data} in /config/job.yaml")
         filename = "/config/job.yaml"
         try:
             with open(filename, 'r') as f:
-                data = yaml.safe_load(f)
+                data = yaml.safe_load(f) or {}
             data[item] = f"{job_data}"
             with open(filename, 'w') as f:
                 yaml.dump(data, f, default_flow_style=False)
@@ -90,11 +98,78 @@ if __name__ == '__main__':
             progress: The progress percentage.
         """
         filename = "/config/job.yaml"
-        with open(filename, 'r') as f:
-            data = yaml.safe_load(f)
-        data[item] = f"{progress}"
-        with open(filename, 'w') as f:
-            yaml.dump(data, f, default_flow_style=False)
+        try:
+            with open(filename, 'r') as f:
+                data = yaml.safe_load(f) or {}
+            data[item] = f"{progress}"
+            with open(filename, 'w') as f:
+                yaml.dump(data, f, default_flow_style=False)
+        except FileNotFoundError:
+            return
+
+    def cleanup_interrupted_files(directory):
+        """Restore any leftover *_old files from a previously interrupted transcode."""
+        restored = 0
+        if not directory or not os.path.exists(directory):
+            return restored
+        for dirpath, _, filenames in os.walk(directory):
+            for filename in filenames:
+                if not filename.endswith("_old"):
+                    continue
+                old_filepath = os.path.join(dirpath, filename)
+                original_filename = filename[:-4]
+                original_filepath = os.path.join(dirpath, original_filename)
+                output_filename = original_filename.replace('264', '265') if "264" in original_filename else original_filename
+                output_filepath = os.path.join(dirpath, output_filename)
+
+                # Do not overwrite if this file already completed or was verified as x265 in transcode_files
+                try:
+                    import sqlite3
+                    if os.path.exists("/config/media.db"):
+                        conn = sqlite3.connect("/config/media.db", timeout=10)
+                        already_done = conn.execute(
+                            "SELECT 1 FROM transcode_files WHERE filename IN (?, ?) AND status IN ('success', 'skipped') LIMIT 1",
+                            (original_filename, output_filename)
+                        ).fetchone()
+                        conn.close()
+                        if already_done:
+                            continue
+                except Exception:
+                    pass
+
+                if os.path.exists(output_filepath) and output_filepath != old_filepath:
+                    try:
+                        logging.warning(f"Removing partial transcode output: {output_filepath}")
+                        os.remove(output_filepath)
+                    except OSError as e:
+                        logging.error(f"Failed to remove partial output {output_filepath}: {e}")
+
+                if output_filepath != original_filepath and os.path.exists(original_filepath):
+                    try:
+                        os.remove(original_filepath)
+                    except OSError:
+                        pass
+
+                try:
+                    logging.warning(f"Restoring interrupted original file: {old_filepath} -> {original_filepath}")
+                    shutil.move(old_filepath, original_filepath)
+                    restored += 1
+                    try:
+                        import sqlite3
+                        if os.path.exists("/config/media.db"):
+                            restored_size = os.path.getsize(original_filepath)
+                            conn = sqlite3.connect("/config/media.db", timeout=10)
+                            conn.execute(
+                                "UPDATE media_files SET codec = 'x264', size_bytes = ? WHERE filepath = ? OR filename IN (?, ?)",
+                                (restored_size, original_filepath, original_filename, output_filename)
+                            )
+                            conn.commit()
+                            conn.close()
+                    except Exception:
+                        pass
+                except OSError as e:
+                    logging.error(f"Failed to restore {old_filepath}: {e}")
+        return restored
 
     # MAIN
     # Detect or resolve encoder from config
@@ -132,27 +207,49 @@ if __name__ == '__main__':
 
     logging.debug("get_video_codec...")
     def get_video_codec(file_path):
-        media_info = MediaInfo.parse(file_path)
-        for track in media_info.tracks:
-            if track.track_type == 'Video':
-                return track.format
+        try:
+            media_info = MediaInfo.parse(file_path)
+            for track in media_info.tracks:
+                if track.track_type == 'Video':
+                    return track.format
+        except Exception as e:
+            logging.warning(f"Unable to read video codec for {file_path}: {e}")
+        return None
 
     logging.debug("get_frame_count...")
     def get_frame_count(file_path):
-        media_info = MediaInfo.parse(file_path)
-        for track in media_info.tracks:
-            if track.track_type == 'Video':
-                return int(track.frame_count)
+        try:
+            media_info = MediaInfo.parse(file_path)
+            for track in media_info.tracks:
+                if track.track_type == 'Video' and track.frame_count is not None:
+                    return int(float(track.frame_count))
+        except (TypeError, ValueError) as e:
+            logging.warning(f"Frame count unavailable or invalid for {file_path}: {e}")
+        except Exception as e:
+            logging.warning(f"Unable to read frame count for {file_path}: {e}")
+        return None
 
     logging.debug("video_duration...")
     # Gets duration in Milliseconds        
     def get_video_duration(file_path):
-        media_info = MediaInfo.parse(file_path)
-        for track in media_info.tracks:
-            if track.track_type == 'Video':
-                return float(track.duration)
+        try:
+            media_info = MediaInfo.parse(file_path)
+            for track in media_info.tracks:
+                if track.track_type == 'Video' and track.duration is not None:
+                    return float(track.duration)
+            for track in media_info.tracks:
+                if track.track_type == 'General' and track.duration is not None:
+                    return float(track.duration)
+        except (TypeError, ValueError) as e:
+            logging.warning(f"Video duration unavailable or invalid for {file_path}: {e}")
+        except Exception as e:
+            logging.warning(f"Unable to read video duration for {file_path}: {e}")
+        return None
 
     logging.info("Done.")
+    restored_on_start = cleanup_interrupted_files(mediafolder)
+    if restored_on_start > 0:
+        logging.info(f"Restored {restored_on_start} interrupted *_old file(s) before starting job.")
     logging.info("Fetching file list...")
     file_list = get_files(mediafolder, include)
     logging.debug(f"File list is: {file_list}")
@@ -191,172 +288,195 @@ if __name__ == '__main__':
             amendedname_path = file_path + "_old"
             logging.info(f"Working on file: {convertedname}.")
             logging.debug(f"File path: {file_path}")
-            #videocodec = subprocess.check_output(['mediainfo', '--Inform=Video;%Format/Info%', file_path]).decode().strip()
-            videocodec = get_video_codec(file_path)
-            logging.info(f"Original Codec: {videocodec}")
-            filesizeinbytes = os.path.getsize(file_path)
-            logging.info(f"Original Size: {filesizeinbytes} bytes")
-            filesize = round(filesizeinbytes / (1024*1024*1024), 2)
-            logging.info(f"Original Size: {filesize} GB")
-            #fileframecount = subprocess.check_output(['mediainfo', '--Inform=Video;%FrameCount%', file_path]).decode().strip()
-            fileframecount = get_frame_count(file_path)
-            logging.info(f"Original Frame Count: {fileframecount}")
-            #fileduration = subprocess.check_output(['mediainfo', '--Inform=General;%Duration%', file_path]).decode().strip()
-            fileduration = get_video_duration(file_path) 
-            logging.info(f"Original Duration: {fileduration}")
-            # Check if file is x264
-            if videocodec == "Advanced Video Codec" or videocodec == "AVC":
-                logging.info("This is an x264 file.")
-                OldFolderSizeBytes += filesizeinbytes
-                logging.info(f"Renaming to `{convertedname}_old`")
-                # Rename file to include _old
-                shutil.move(file_path, amendedname_path)
-                #os.rename(file_path, f"{os.path.dirname(file_path)}/{convertedname}_old")
+            try:
+                #videocodec = subprocess.check_output(['mediainfo', '--Inform=Video;%Format/Info%', file_path]).decode().strip()
+                videocodec = get_video_codec(file_path)
+                logging.info(f"Original Codec: {videocodec}")
+                filesizeinbytes = os.path.getsize(file_path)
+                logging.info(f"Original Size: {filesizeinbytes} bytes")
+                filesize = round(filesizeinbytes / (1024*1024*1024), 2)
+                logging.info(f"Original Size: {filesize} GB")
+                # Check if file is x264
+                if videocodec == "Advanced Video Codec" or videocodec == "AVC":
+                    #fileframecount = subprocess.check_output(['mediainfo', '--Inform=Video;%FrameCount%', file_path]).decode().strip()
+                    fileframecount = get_frame_count(file_path)
+                    logging.info(f"Original Frame Count: {fileframecount}")
+                    #fileduration = subprocess.check_output(['mediainfo', '--Inform=General;%Duration%', file_path]).decode().strip()
+                    fileduration = get_video_duration(file_path) 
+                    logging.info(f"Original Duration: {fileduration}")
+                    logging.info("This is an x264 file.")
+                    OldFolderSizeBytes += filesizeinbytes
+                    logging.info(f"Renaming to `{convertedname}_old`")
+                    # Rename file to include _old
+                    shutil.move(file_path, amendedname_path)
+                    #os.rename(file_path, f"{os.path.dirname(file_path)}/{convertedname}_old")
 
-                if "264" in convertedname:
-                    logging.info("File name contains `x264`.  Will replace this with `x265` in transcoded file")
-                    outputfile = os.path.join(os.path.dirname(file_path), convertedname.replace('264', '265'))
-                else:
-                    outputfile = file_path
-
-                logging.info(f"Transcode config:   Quality={quality}  Encoder={get_encoder_display_name(active_encoder)}")
-                #if "films" in mediafolder:
-                #    logging.info("We're encoding a film to 10 Bit, will add this to output file name")
-                #    outputfile = outputfile.replace('.mkv', '-10bit.mkv')
-
-                logging.info(f"Output file path will be: {outputfile}")
-
-                progress_percentage = int(i / total_files * 100)
-                progress_percentage_next_step = int((i + 1) / total_files * 100)
-
-                logging.info("Beginning transcode...")
-                starttime = datetime.now()
-                cmd = build_ffmpeg_cmd(
-                    input_path=f"{file_path}_old",
-                    output_path=outputfile,
-                    encoder=active_encoder,
-                    quality=quality,
-                    title=filetitle
-                )
-
-                logging.info(f"FFmpeg command: {' '.join(cmd)}")
-                process = FfmpegProgress(cmd)
-                
-                for file_progress_percentage in process.run_command_with_progress():
-                    file_progress_rounded = round(file_progress_percentage)
-                    logging.debug(f"File Progress: {file_progress_percentage}%")
-                    update_progress_yaml("file_progress", file_progress_rounded)
-
-                    if progress_percentage == 0:
-                        job_progress_percentage = round(((progress_percentage_next_step - progress_percentage)/100) * file_progress_percentage)
+                    if "264" in convertedname:
+                        logging.info("File name contains `x264`.  Will replace this with `x265` in transcoded file")
+                        outputfile = os.path.join(os.path.dirname(file_path), convertedname.replace('264', '265'))
                     else:
-                        job_progress_percentage = round(progress_percentage + (((progress_percentage_next_step - progress_percentage)/100) * file_progress_percentage))
-                            
-                    logging.debug(f"Job Progress: {job_progress_percentage}%")
-                    update_progress_yaml("job_progress", job_progress_percentage)
+                        outputfile = file_path
 
-                    # Calculate estimated time remaining for current file
-                    if file_progress_percentage > 0:
-                        elapsed = (datetime.now() - starttime).total_seconds()
-                        estimated_total = elapsed / (file_progress_percentage / 100)
-                        eta_seconds = max(0, estimated_total - elapsed)
-                        eta_hours = int(eta_seconds // 3600)
-                        eta_minutes = int((eta_seconds % 3600) // 60)
-                        if eta_hours > 0:
-                            eta_display = f"{eta_hours}h {eta_minutes}m"
-                        else:
-                            eta_display = f"{eta_minutes}m"
-                        update_progress_yaml("eta", eta_display)
-                    else:
-                        update_progress_yaml("eta", "Calculating...")
+                    logging.info(f"Transcode config:   Quality={quality}  Encoder={get_encoder_display_name(active_encoder)}")
+                    #if "films" in mediafolder:
+                    #    logging.info("We're encoding a film to 10 Bit, will add this to output file name")
+                    #    outputfile = outputfile.replace('.mkv', '-10bit.mkv')
+
+                    logging.info(f"Output file path will be: {outputfile}")
+
+                    progress_percentage = int(i / total_files * 100)
+                    progress_percentage_next_step = int((i + 1) / total_files * 100)
+
+                    logging.info("Beginning transcode...")
+                    starttime = datetime.now()
+                    cmd = build_ffmpeg_cmd(
+                        input_path=f"{file_path}_old",
+                        output_path=outputfile,
+                        encoder=active_encoder,
+                        quality=quality,
+                        title=filetitle
+                    )
+
+                    logging.info(f"FFmpeg command: {' '.join(cmd)}")
+                    process = FfmpegProgress(cmd)
                     
-                # Clear ETA after file transcode completes
-                update_progress_yaml("eta", "")
-                newfilesizeinbytes = os.path.getsize(outputfile)
-                NewFolderSizeBytes += newfilesizeinbytes
-                newfilesize = round(newfilesizeinbytes / (1024*1024*1024), 2)
-                percdiff = round(((newfilesizeinbytes/filesizeinbytes)-1)*100, 2)
-                endtime = datetime.now()
-                duration = endtime - starttime
-                logging.info(f"Transcode complete.  Duration: {duration.seconds // 3600} Hrs {duration.seconds // 60} Mins.")
+                    for file_progress_percentage in process.run_command_with_progress():
+                        file_progress_rounded = round(file_progress_percentage)
+                        logging.debug(f"File Progress: {file_progress_percentage}%")
+                        update_progress_yaml("file_progress", file_progress_rounded)
 
-                logging.info("Running post-transcode checks...")
-                if newfilesize > filesize:
-                    logging.error("ERROR: New file size is larger than original file size!")
-                    logging.warning(f"New file Size: {newfilesize} GB  |  Original file Size: {filesize} GB")
-                    jobfailed = filetitle
-                    Failed.append(jobfailed)
-                    logging.info("Adding job to failure list")
-                    FailedCount += 1
-                    # Record failed file in history (size check failed)
-                    category, title, season = derive_metadata(file_path, mediafolder)
-                    record_file(history_job_id, file_path, convertedname, "failed",
-                               category=category, title=title, season=season,
-                               original_size_bytes=filesizeinbytes, new_size_bytes=newfilesizeinbytes,
-                               original_codec="x264", quality=int(quality),
-                               duration_seconds=duration.total_seconds(),
-                               failure_reason="New file larger than original")
-                else:
-                    logging.info("Confirmed new file is smaller than original")
-                    #newfileduration = subprocess.check_output(['mediainfo', '--Inform=General;%Duration%', outputfile]).decode().strip()
-                    newfileduration = get_video_duration(outputfile)
-                    duration_tolerance = int(fileduration) * 0.0005 # 0.05% of original duration
-                    if (int(newfileduration) <= int(fileduration) - duration_tolerance) or (int(newfileduration) >= int(fileduration) + duration_tolerance):
-                        logging.error("ERROR: New file duration does not match original file Duration!")
-                        logging.warning(f"New file Duration: {(newfileduration/60000):.2f} min ({newfileduration}) |  Original file Duration: {(fileduration/60000):.2f} min ({fileduration})")
+                        if progress_percentage == 0:
+                            job_progress_percentage = round(((progress_percentage_next_step - progress_percentage)/100) * file_progress_percentage)
+                        else:
+                            job_progress_percentage = round(progress_percentage + (((progress_percentage_next_step - progress_percentage)/100) * file_progress_percentage))
+                                
+                        logging.debug(f"Job Progress: {job_progress_percentage}%")
+                        update_progress_yaml("job_progress", job_progress_percentage)
+
+                        # Calculate estimated time remaining for current file
+                        if file_progress_percentage > 0:
+                            elapsed = (datetime.now() - starttime).total_seconds()
+                            estimated_total = elapsed / (file_progress_percentage / 100)
+                            eta_seconds = max(0, estimated_total - elapsed)
+                            eta_hours = int(eta_seconds // 3600)
+                            eta_minutes = int((eta_seconds % 3600) // 60)
+                            if eta_hours > 0:
+                                eta_display = f"{eta_hours}h {eta_minutes}m"
+                            else:
+                                eta_display = f"{eta_minutes}m"
+                            update_progress_yaml("eta", eta_display)
+                        else:
+                            update_progress_yaml("eta", "Calculating...")
+                        
+                    # Clear ETA after file transcode completes
+                    update_progress_yaml("eta", "")
+                    newfilesizeinbytes = os.path.getsize(outputfile)
+                    NewFolderSizeBytes += newfilesizeinbytes
+                    newfilesize = round(newfilesizeinbytes / (1024*1024*1024), 2)
+                    percdiff = round(((newfilesizeinbytes/filesizeinbytes)-1)*100, 2)
+                    endtime = datetime.now()
+                    duration = endtime - starttime
+                    logging.info(f"Transcode complete.  Duration: {duration.seconds // 3600} Hrs {duration.seconds // 60} Mins.")
+
+                    logging.info("Running post-transcode checks...")
+                    if newfilesize > filesize:
+                        logging.error("ERROR: New file size is larger than original file size!")
+                        logging.warning(f"New file Size: {newfilesize} GB  |  Original file Size: {filesize} GB")
                         jobfailed = filetitle
-                    else:
-                        logging.info(f"Confirmed file durations match (tolerance: {duration_tolerance:.0f}ms / 0.015%)")
-
-                    #newfileframecount = subprocess.check_output(['mediainfo', '--Inform=Video;%FrameCount%', outputfile]).decode().strip()
-                    newfileframecount = get_frame_count(outputfile)
-                    if (int(newfileframecount) < int(fileframecount) * 0.9989) or (int(newfileframecount) > int(fileframecount) * 1.0011):
-                        logging.warning("WARNING: Frame Count mismatch between original and new files!")
-                        jobfailed = filetitle
-                    else:
-                        logging.info(f"Frame Counts Verified to margin of 0.11%")
-
-                    logging.info(f"New file Frame Count: {newfileframecount}  |  Original file frame count: {fileframecount}")
-                    logging.info(f"Done.  New file size is {newfilesize} GB.  {percdiff}% smaller.")
-                    if delete == "Yes":
-                        logging.info("Deleting original file...")
-                        try:
-                            os.remove(file_path + "_old")
-                            logging.info("Done.")
-                        except:
-                            logging.error("ERROR: Unable to delete original file")
-
-                    if jobfailed != "":
                         Failed.append(jobfailed)
                         logging.info("Adding job to failure list")
                         FailedCount += 1
-                        # Record failed file in history
+                        # Record failed file in history (size check failed)
                         category, title, season = derive_metadata(file_path, mediafolder)
                         record_file(history_job_id, file_path, convertedname, "failed",
                                    category=category, title=title, season=season,
                                    original_size_bytes=filesizeinbytes, new_size_bytes=newfilesizeinbytes,
                                    original_codec="x264", quality=int(quality),
                                    duration_seconds=duration.total_seconds(),
-                                   failure_reason=jobfailed)
+                                   failure_reason="New file larger than original")
                     else:
-                        SuccessfulCount += 1
-                        Successful.append(filetitle)
-                        # Record successful file in history
-                        category, title, season = derive_metadata(file_path, mediafolder)
-                        record_file(history_job_id, file_path, convertedname, "success",
-                                   category=category, title=title, season=season,
-                                   original_size_bytes=filesizeinbytes, new_size_bytes=newfilesizeinbytes,
-                                   original_codec="x264", quality=int(quality),
-                                   duration_seconds=duration.total_seconds())
+                        logging.info("Confirmed new file is smaller than original")
+                        #newfileduration = subprocess.check_output(['mediainfo', '--Inform=General;%Duration%', outputfile]).decode().strip()
+                        newfileduration = get_video_duration(outputfile)
+                        if fileduration is not None and newfileduration is not None:
+                            duration_tolerance = int(fileduration) * 0.0005 # 0.05% of original duration
+                            if (int(newfileduration) <= int(fileduration) - duration_tolerance) or (int(newfileduration) >= int(fileduration) + duration_tolerance):
+                                logging.error("ERROR: New file duration does not match original file Duration!")
+                                logging.warning(f"New file Duration: {(newfileduration/60000):.2f} min ({newfileduration}) |  Original file Duration: {(fileduration/60000):.2f} min ({fileduration})")
+                                jobfailed = filetitle
+                            else:
+                                logging.info(f"Confirmed file durations match (tolerance: {duration_tolerance:.0f}ms / 0.015%)")
+                        else:
+                            logging.warning(f"Skipping duration check (original={fileduration}, new={newfileduration})")
 
-            elif videocodec == "High Efficiency Video Coding" or videocodec == "HEVC":
-                logging.info("This is an x265 file.  Skipping")
-                SkippedCount += 1
-                # Record skipped file in history
-                category, title, season = derive_metadata(file_path, mediafolder)
-                record_file(history_job_id, file_path, convertedname, "skipped",
-                           category=category, title=title, season=season,
-                           original_size_bytes=filesizeinbytes, original_codec="x265")
+                        #newfileframecount = subprocess.check_output(['mediainfo', '--Inform=Video;%FrameCount%', outputfile]).decode().strip()
+                        newfileframecount = get_frame_count(outputfile)
+                        if fileframecount is not None and newfileframecount is not None:
+                            if (int(newfileframecount) < int(fileframecount) * 0.9989) or (int(newfileframecount) > int(fileframecount) * 1.0011):
+                                logging.warning("WARNING: Frame Count mismatch between original and new files!")
+                                jobfailed = filetitle
+                            else:
+                                logging.info(f"Frame Counts Verified to margin of 0.11%")
+                        else:
+                            logging.warning(f"Skipping frame count check (original={fileframecount}, new={newfileframecount})")
+
+                        logging.info(f"New file Frame Count: {newfileframecount}  |  Original file frame count: {fileframecount}")
+                        logging.info(f"Done.  New file size is {newfilesize} GB.  {percdiff}% smaller.")
+                        if delete == "Yes":
+                            logging.info("Deleting original file...")
+                            try:
+                                os.remove(file_path + "_old")
+                                logging.info("Done.")
+                            except:
+                                logging.error("ERROR: Unable to delete original file")
+
+                        if jobfailed != "":
+                            Failed.append(jobfailed)
+                            logging.info("Adding job to failure list")
+                            FailedCount += 1
+                            # Record failed file in history
+                            category, title, season = derive_metadata(file_path, mediafolder)
+                            record_file(history_job_id, file_path, convertedname, "failed",
+                                       category=category, title=title, season=season,
+                                       original_size_bytes=filesizeinbytes, new_size_bytes=newfilesizeinbytes,
+                                       original_codec="x264", quality=int(quality),
+                                       duration_seconds=duration.total_seconds(),
+                                       failure_reason=jobfailed)
+                        else:
+                            SuccessfulCount += 1
+                            Successful.append(filetitle)
+                            # Record successful file in history
+                            category, title, season = derive_metadata(file_path, mediafolder)
+                            record_file(history_job_id, file_path, convertedname, "success",
+                                       category=category, title=title, season=season,
+                                       original_size_bytes=filesizeinbytes, new_size_bytes=newfilesizeinbytes,
+                                       original_codec="x264", quality=int(quality),
+                                       duration_seconds=duration.total_seconds())
+
+                elif videocodec == "High Efficiency Video Coding" or videocodec == "HEVC":
+                    logging.info("This is an x265 file.  Skipping")
+                    SkippedCount += 1
+                    # Record skipped file in history
+                    category, title, season = derive_metadata(file_path, mediafolder)
+                    record_file(history_job_id, file_path, convertedname, "skipped",
+                               category=category, title=title, season=season,
+                               original_size_bytes=filesizeinbytes, original_codec="x265")
+            except Exception as file_err:
+                logging.error(f"Unexpected error processing file {convertedname}: {file_err}", exc_info=True)
+                update_progress_yaml("eta", "")
+                if os.path.exists(amendedname_path):
+                    cleanup_interrupted_files(os.path.dirname(file_path))
+                Failed.append(filetitle)
+                FailedCount += 1
+                try:
+                    category, title, season = derive_metadata(file_path, mediafolder)
+                    record_file(history_job_id, file_path, convertedname, "failed",
+                               category=category, title=title, season=season,
+                               original_size_bytes=os.path.getsize(file_path) if os.path.exists(file_path) else None,
+                               original_codec="x264", quality=int(quality),
+                               failure_reason=str(file_err))
+                except Exception:
+                    pass
             
             progress_percentage = int((i + 1) / total_files * 100)
             logging.debug(f"Progress: {progress_percentage}%")
@@ -510,7 +630,37 @@ if __name__ == '__main__':
     if file_list != []:
         #Run the Convert Job
         logging.info("running convert job...")
-        convert_job(file_list)
+        try:
+            convert_job(file_list)
+        except BaseException as fatal_err:
+            logging.error(f"Transcode job interrupted or terminated with error: {fatal_err}", exc_info=True)
+            update_progress_yaml("eta", "")
+            cleanup_interrupted_files(mediafolder)
+            TotalFiles = SuccessfulCount + FailedCount + SkippedCount
+            try:
+                complete_job(
+                    history_job_id,
+                    TotalFiles,
+                    SuccessfulCount,
+                    max(1, FailedCount),
+                    SkippedCount,
+                    OldFolderSizeBytes,
+                    NewFolderSizeBytes
+                )
+            except Exception as db_err:
+                logging.error(f"Failed to record history job completion on exit: {db_err}")
+            if scheduled_job_id is not None:
+                try:
+                    from modules.scheduler import mark_job_paused
+                    processed_count = SuccessfulCount + SkippedCount
+                    remaining_files = file_list[processed_count:]
+                    remaining_count = max(1, len(remaining_files))
+                    remaining_bytes = sum(os.path.getsize(f) for f in remaining_files if os.path.exists(f))
+                    mark_job_paused(scheduled_job_id, remaining_count=remaining_count, remaining_bytes=remaining_bytes)
+                    logging.info(f"Marked interrupted scheduled job #{scheduled_job_id} as paused for recovery.")
+                except Exception as sched_err:
+                    logging.error(f"Failed to update scheduled job #{scheduled_job_id} on exit: {sched_err}")
+            raise
     else:
         logging.warning("file list is empty.  Is mediafolder and include criteria correct?")
         # Complete the job with zero counts
